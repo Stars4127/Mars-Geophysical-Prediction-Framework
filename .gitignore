@@ -9,5 +9,5 @@ __pycache__/
 *.py[cod]
 
 datasets/dust_small.csv
-#way too large for some reason 2 gb
-/saved_models/regression_models/thermal_inertia/rf_model.pkl
+*.csv
+

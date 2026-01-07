@@ -16,7 +16,7 @@ import optuna
 # Global config
 # =============================
 SEED = 42
-BATCH_SIZE = 1024
+BATCH_SIZE = 4096
 MODEL_DIR = "neural_nets/temp_predictor"
 PARAMS_PATH = f"{MODEL_DIR}/best_params.json"
 MODEL_PATH = f"{MODEL_DIR}/best_model.pt"
@@ -73,15 +73,15 @@ class TempPredictor:
         X_trainval, X_test, y_trainval, y_test = train_test_split(
             X, y, test_size=self.test_size, random_state=SEED
         )
-        X_train, X_val, y_train, y_val = train_test_split(
+        X_train, X_val, self.y_train, self.y_val = train_test_split(
             X_trainval, y_trainval, test_size=val_fraction, random_state=SEED
         )
 
         self.y_test_raw = y_test.copy()
 
-        self.y_train = np.log1p(y_train)
-        self.y_val = np.log1p(y_val)
-        self.y_test = np.log1p(y_test)
+        # self.y_train = np.log1p(y_train)
+        # self.y_val = np.log1p(y_val)
+        # self.y_test = np.log1p(y_test)
 
         self.x_train = self.scaler.fit_transform(X_train)
         self.x_val = self.scaler.transform(X_val)
@@ -107,7 +107,7 @@ class TempPredictor:
     # ----------------------------
     # Training loop
     # ----------------------------
-    def _train(self, model, lr, max_epochs=250, patience=30):
+    def _train(self, model, lr, max_epochs=250, patience=7, trial_idx=None):
         model.to(device)
         optimizer = optim.Adam(model.parameters(), lr=lr)
         criterion = nn.MSELoss()
@@ -140,17 +140,24 @@ class TempPredictor:
             else:
                 patience_ctr += 1
 
+            # ----- Simple epoch logging -----
+            if trial_idx is not None:
+                print(f"[Trial {trial_idx}] Epoch {epoch + 1}/{max_epochs} | "
+                      f"Train Loss: {epoch_loss:.4f} | Val Loss: {val_loss:.4f}")
+
             if patience_ctr >= patience:
-                print(f"⏹ Early stopping at epoch {epoch}")
+                print(f"⏹ Early stopping at epoch {epoch + 1}")
                 break
 
+        if best_state is None:
+            best_state = model.state_dict()
         model.load_state_dict(best_state)
         return model
 
     # ----------------------------
-    # Hyperparameter tuning
+    # Hyperparameter tuning (with trial logging)
     # ----------------------------
-    def tune(self, n_trials=25, max_epochs=50):
+    def tune(self, n_trials=25, max_epochs=10):
         def objective(trial):
             layers = trial.suggest_int("layers", 1, 4)
             units = trial.suggest_int("units", 16, 128, step=16)
@@ -158,14 +165,13 @@ class TempPredictor:
             lr = trial.suggest_float("lr", 1e-4, 1e-2, log=True)
 
             model = TempANN(len(self.features), layers, units, activation).to(device)
-            self._train(model, lr=lr, max_epochs=max_epochs)
+            self._train(model, lr=lr, max_epochs=max_epochs, trial_idx=trial.number)
 
             # Evaluate on validation
             model.eval()
             with torch.no_grad():
                 preds = model(self.x_val_tensor).cpu().numpy().flatten()
-            preds = np.expm1(preds)
-            r2 = r2_score(np.expm1(self.y_val), preds)
+            r2 = r2_score(self.y_val, preds)
             return -r2  # maximize r2
 
         study = optuna.create_study()
@@ -212,7 +218,6 @@ class TempPredictor:
 
         with torch.no_grad():
             preds = self.model(self.x_test_tensor).cpu().numpy().flatten()
-        preds = np.expm1(preds)
         r2 = r2_score(self.y_test_raw, preds)
         mae = mean_absolute_error(self.y_test_raw, preds)
         print(f"📊 Test R²: {r2:.4f} | MAE: {mae:.4f}")
@@ -239,6 +244,6 @@ if __name__ == "__main__":
     )
 
     predictor.preprocess()
-    predictor.tune(n_trials=25, max_epochs=50)
+    predictor.tune(n_trials=10, max_epochs=10)
     predictor.train_best()
     predictor.load_and_eval()

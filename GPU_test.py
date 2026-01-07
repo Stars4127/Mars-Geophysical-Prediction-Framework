@@ -1,17 +1,8 @@
 import torch
 
-# Detect device
-device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
-print(f"PyTorch device: {device}")
+print("CUDA available:", torch.cuda.is_available())
+print("GPU count:", torch.cuda.device_count())
 
-# Create a small test tensor
-x = torch.randn(1000, 1000)
-
-if device != "cpu":
-    x = x.to(device)
-    print(f"Tensor moved to {device} successfully.")
-
-# Simple operation to test GPU compute
-y = x @ x.T  # matrix multiplication
-print("Computation done. Tensor shape:", y.shape)
-print("y device:", y.device)
+if torch.cuda.is_available():
+    print("Current device:", torch.cuda.current_device())
+    print("GPU name:", torch.cuda.get_device_name(0))

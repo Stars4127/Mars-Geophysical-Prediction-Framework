@@ -275,7 +275,7 @@ def main():
 
     predictor.preprocess()
     # predictor.tune(n_trials=25)
-    predictor.train_best()
+    # predictor.train_best()
     predictor.load_and_eval()
 
 if __name__ == "__main__":

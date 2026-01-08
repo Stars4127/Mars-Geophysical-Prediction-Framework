@@ -244,6 +244,6 @@ if __name__ == "__main__":
     )
 
     predictor.preprocess()
-    predictor.tune(n_trials=10, max_epochs=10)
-    predictor.train_best()
+    # predictor.tune(n_trials=10, max_epochs=10)
+    # predictor.train_best()
     predictor.load_and_eval()

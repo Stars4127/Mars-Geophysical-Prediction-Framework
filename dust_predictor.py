@@ -241,6 +241,6 @@ if __name__ == "__main__":
         "Albedo"
     ])
     predictor.preprocess()
-    # predictor.tune(n_trials=10, max_epochs=10)
-    predictor.train_best(max_epochs=500)
+    #predictor.tune(n_trials=30, max_epochs=10)
+    # predictor.train_best(max_epochs=500)
     predictor.load_and_eval()

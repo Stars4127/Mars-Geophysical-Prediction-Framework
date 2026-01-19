@@ -8,6 +8,5 @@
 __pycache__/
 *.py[cod]
 
-datasets/dust_small.csv
-*.csv
-
+datasets/*
+!datasets/core_set_2ppd.csv

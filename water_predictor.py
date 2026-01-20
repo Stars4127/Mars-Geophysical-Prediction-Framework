@@ -343,7 +343,7 @@ def main():
     )
 
     predictor.preprocess()
-    predictor.tune(n_trials=10, max_epochs=10)
+    predictor.tune(n_trials=25, max_epochs=10)
     predictor.train_best()
     predictor.load_and_eval()
 

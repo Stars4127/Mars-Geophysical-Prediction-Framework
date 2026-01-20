@@ -324,6 +324,6 @@ if __name__ == "__main__":
     ])
     #check this but without albedo
     predictor.preprocess()
-    predictor.tune(n_trials=30, max_epochs=10)
-    predictor.train_best(max_epochs=500)
+    predictor.tune(n_trials=25, max_epochs=10)
+    predictor.train_best()
     predictor.load_and_eval()

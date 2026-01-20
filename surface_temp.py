@@ -333,6 +333,6 @@ if __name__ == "__main__":
         ]
     )
     predictor.preprocess()
-    predictor.tune(n_trials=25, max_epochs=15)
+    predictor.tune(n_trials=25, max_epochs=10)
     predictor.train_best(max_epochs=300)
     predictor.load_and_eval()

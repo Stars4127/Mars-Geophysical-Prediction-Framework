@@ -16,10 +16,11 @@ import optuna
 # Global config
 # =============================
 SEED = 42
-BATCH_SIZE = 4096
+BATCH_SIZE = 1024
+ENSEMBLE_SIZE = 5
 MODEL_DIR = "neural_nets/dust_predictor"
 PARAMS_PATH = f"{MODEL_DIR}/best_params.json"
-MODEL_PATH = f"{MODEL_DIR}/best_model.pt"
+MODEL_PATH = f"{MODEL_DIR}/model.pt"
 
 random.seed(SEED)
 np.random.seed(SEED)
@@ -66,17 +67,68 @@ class DustPredictor:
     # Preprocess
     # ----------------------------
     def preprocess(self, val_fraction=0.2):
-        df = pd.read_csv(self.path).dropna()
-        X = df[self.features].values
-        y = df[self.target_column].values
+        df = pd.read_csv(self.path, na_values=['null', 'Null', 'NULL'])
+        
+        # Select subset: We need original features + target + Latitude (for splitting)
+        lat_col = 'Latitude (N)'
+        asp_col = 'MOLA 128ppd Aspect'
+        
+        # Engineering: Encoding Latitude and Aspect
+        if lat_col in df.columns:
+            df['latitude_sin'] = np.sin(np.radians(df[lat_col]))
+            df['latitude_cos'] = np.cos(np.radians(df[lat_col]))
+            if lat_col in self.features:
+                self.features = [f for f in self.features if f != lat_col]
+                self.features.extend(['latitude_sin', 'latitude_cos'])
 
-        X_trainval, X_test, y_trainval, y_test = train_test_split(
-            X, y, test_size=self.test_size, random_state=SEED
-        )
-        X_train, X_val, self.y_train, self.y_val = train_test_split(
-            X_trainval, y_trainval, test_size=val_fraction, random_state=SEED
-        )
+        if asp_col in df.columns:
+            df['aspect_sin'] = np.sin(np.radians(df[asp_col]))
+            df['aspect_cos'] = np.cos(np.radians(df[asp_col]))
+            if asp_col in self.features:
+                self.features = [f for f in self.features if f != asp_col]
+                self.features.extend(['aspect_sin', 'aspect_cos'])
 
+        # Now filter df to needed columns (features, target_column, and lat_col for splitting)
+        needed_cols = list(set(self.features + [self.target_column, lat_col]))
+        needed_cols = [c for c in needed_cols if c in df.columns]
+        df = df[needed_cols]
+
+        # Coerce to numeric
+        for col in needed_cols:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+            
+        original_len = len(df)
+        df = df.dropna()
+        print(f"📉 Dropped {original_len - len(df)} rows. Final size: {len(df)}")
+        
+        if len(df) == 0:
+            raise ValueError("Dataset empty after preprocessing.")
+
+        # --- Spatial Splitting by Latitude Bands ---
+        df["lat_bin"] = pd.cut(df["Latitude (N)"], bins=10)
+        unique_bins = sorted(df["lat_bin"].unique().tolist())
+        
+        import random as rnd
+        rnd.seed(SEED)
+        rnd.shuffle(unique_bins)
+        
+        train_bins = unique_bins[:7]
+        val_bins = unique_bins[7:9]
+        test_bins = unique_bins[9:]
+        
+        df_train = df[df["lat_bin"].isin(train_bins)]
+        df_val = df[df["lat_bin"].isin(val_bins)]
+        df_test = df[df["lat_bin"].isin(test_bins)]
+        
+        print(f"Spatial Split -> Train: {len(df_train)}, Val: {len(df_val)}, Test: {len(df_test)}")
+
+        X_train = df_train[self.features].values
+        self.y_train = df_train[self.target_column].values
+        X_val = df_val[self.features].values
+        self.y_val = df_val[self.target_column].values
+        X_test = df_test[self.features].values
+        y_test = df_test[self.target_column].values
+        
         self.y_test_raw = y_test.copy()
 
         # self.y_train = np.log1p(y_train)
@@ -107,7 +159,7 @@ class DustPredictor:
     # ----------------------------
     # Training loop
     # ----------------------------
-    def _train(self, model, lr, max_epochs=500, patience=7, trial_idx=None):
+    def _train(self, model, lr, max_epochs=250, patience=15, trial_idx=None):
         model.to(device)
         optimizer = optim.Adam(model.parameters(), lr=lr)
         criterion = nn.MSELoss()
@@ -131,6 +183,8 @@ class DustPredictor:
             # Validation
             model.eval()
             with torch.no_grad():
+                val_preds = model(self.x_val_tensor).cpu().numpy().flatten()
+                val_r2 = r2_score(self.y_val, val_preds)
                 val_loss = criterion(model(self.x_val_tensor), self.y_val_tensor).item()
 
             if val_loss < best_loss:
@@ -143,8 +197,7 @@ class DustPredictor:
             # ----- Simple epoch logging -----
             if trial_idx is not None:
                 print(f"[Trial {trial_idx}]")
-            print(f"Epoch {epoch + 1}/{max_epochs} | "
-            f"Train Loss: {epoch_loss:.8f} | Val Loss: {val_loss:.8f}")
+            print(f"Epoch {epoch + 1}/{max_epochs} | Train MSE: {epoch_loss:.4f} | Val MSE: {val_loss:.4f} | Val R²: {val_r2:.4f}")
 
             if patience_ctr >= patience:
                 print(f"⏹ Early stopping at epoch {epoch + 1}")
@@ -185,44 +238,74 @@ class DustPredictor:
         print("✅ Best params saved:", self.best_params)
 
     # ----------------------------
-    # Train best model
+    # Train best model (Ensemble)
     # ----------------------------
-    def train_best(self, max_epochs=100):
+    def train_best(self, max_epochs=300):
         if self.best_params is None:
             if os.path.exists(PARAMS_PATH):
                 with open(PARAMS_PATH) as f:
                     self.best_params = json.load(f)
             else:
-                raise RuntimeError("No best params found. Run tune() first.")
+                raise RuntimeError("No saved params found. Run tune() first.")
 
-        p = self.best_params
-        model = DustANN(len(self.features), p["layers"], p["units"], p["activation"])
-        model = self._train(model, lr=p["lr"], max_epochs=max_epochs)
-        torch.save(model.state_dict(), MODEL_PATH)
-        print(f"💾 Best model saved to {MODEL_PATH}")
+        lr = self.best_params["lr"]
+        layers = self.best_params["layers"]
+        units = self.best_params["units"]
+        activation = self.best_params["activation"]
+
+        print(f"🚀 Training Ensemble of {ENSEMBLE_SIZE} models...")
+        for i in range(ENSEMBLE_SIZE):
+            print(f"\n--- Training Member {i+1}/{ENSEMBLE_SIZE} ---")
+            torch.manual_seed(SEED + i)
+            
+            model = DustANN(len(self.features), layers, units, activation)
+            model = self._train(model, lr, max_epochs=max_epochs)
+            
+            save_path = f"{MODEL_DIR}/model_{i}.pt"
+            torch.save(model.state_dict(), save_path)
+            print(f"✅ Member {i+1} saved to {save_path}")
+
+        print(f"💾 Ensemble training complete in {MODEL_DIR}")
         self.model = model
 
     # ----------------------------
-    # Load + evaluate
+    # Load and evaluate (Ensemble)
     # ----------------------------
     def load_and_eval(self):
-        if not os.path.exists(MODEL_PATH):
-            raise FileNotFoundError("No trained model found. Run train_best() first.")
+        # Check if any model exists, using the first ensemble member's path as a proxy
+        if not os.path.exists(f"{MODEL_DIR}/model_0.pt"):
+            raise FileNotFoundError(f"No trained ensemble models found in {MODEL_DIR}. Run train_best() first.")
 
-        if self.model is None:
-            p = self.best_params or json.load(open(PARAMS_PATH))
-            model = DustANN(len(self.features), p["layers"], p["units"], p["activation"])
-            model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
-            model.to(device)
+        with open(PARAMS_PATH) as f:
+            params = json.load(f)
+
+        all_preds = []
+        print(f"🔍 Loading Ensemble of {ENSEMBLE_SIZE} models from {MODEL_DIR}...")
+
+        for i in range(ENSEMBLE_SIZE):
+            model = DustANN(len(self.features), params["layers"], params["units"], params["activation"]).to(device)
+            save_path = f"{MODEL_DIR}/model_{i}.pt"
+            model.load_state_dict(torch.load(save_path, map_location=device, weights_only=True))
             model.eval()
-            self.model = model
+            
+            with torch.no_grad():
+                p = model(self.x_test_tensor).cpu().numpy().flatten()
+                all_preds.append(p)
 
-        with torch.no_grad():
-            preds = self.model(self.x_test_tensor).cpu().numpy().flatten()
-        r2 = r2_score(self.y_test_raw, preds)
-        mae = mean_absolute_error(self.y_test_raw, preds)
-        print(f"📊 Test R²: {r2:.4f} | MAE: {mae:.4f}")
-        return preds
+        # Stack predictions
+        preds_stack = np.stack(all_preds)
+        
+        # Calculate ensemble stats
+        mean_pred = preds_stack.mean(0)
+        uncertainty = preds_stack.std(0)
+
+        r2 = r2_score(self.y_test_raw, mean_pred)
+        mae = mean_absolute_error(self.y_test_raw, mean_pred)
+
+        print(f"📊 Ensemble Test R²: {r2:.4f} | MAE: {mae:.4f}")
+        print(f"💡 Mean Uncertainty (StdDev): {uncertainty.mean():.4f}")
+        
+        return mean_pred, uncertainty
 
 
 # =============================
@@ -230,17 +313,17 @@ class DustPredictor:
 # =============================
 if __name__ == "__main__":
     predictor = DustPredictor(
-        path= "datasets/dust_small.csv",
-        target_column='OMEGA Ferric/Dust 860nm ratio',
+        path= "datasets/core_set_2ppd.csv",
+        target_column='OMEGA Ferric/Dust 860nm ratio Ody et al 2012',
         features=[
-        "Elevation",
-        "Slope",
-        "Yearly Average Mars Surface Temperature",
-        "Dayside Thermal Inertia",
+        "MOLA 128ppd Elevation",
+        "MOLA 128ppd Slope",
+        "Dayside Thermal Inertia (20 ppd) (Putzig and Mellon 2007)",
         "MOLA 128ppd Aspect",
-        "Albedo"
+        "OMEGA Est. Lambert Albedo 1080nm Ody et al 2012"
     ])
+    #check this but without albedo
     predictor.preprocess()
-    #predictor.tune(n_trials=30, max_epochs=10)
-    # predictor.train_best(max_epochs=500)
+    predictor.tune(n_trials=30, max_epochs=10)
+    predictor.train_best(max_epochs=500)
     predictor.load_and_eval()

@@ -328,7 +328,6 @@ if __name__ == "__main__":
             "OMEGA Est. Lambert Albedo 1080nm Ody et al 2012",
             "Dayside Thermal Inertia (20 ppd) (Putzig and Mellon 2007)",
             "Nightside Thermal Inertia (20 ppd) (Putzig and Mellon 2007)",
-            "OMEGA Ferric/Dust 860nm ratio Ody et al 2012",
             "MOLA Roughness 0.6km Baseline - Numeric"
         ]
     )

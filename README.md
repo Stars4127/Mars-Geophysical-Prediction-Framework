@@ -18,9 +18,6 @@ The project relies on a structured Mars dataset as the base for all models, foll
 4.  **Operational Feasibility**: Determine survivability factors like temperature extremes and frost likelihood.
 
 ## Current Tasks
-- [ ] Update `dust_predictor.py` to use `core_set_2ppd.csv`
-- [ ] Update `water_predictor.py` to use `core_set_2ppd.csv`
 - [ ] Work on the Landing Goodness Score logic
 - [ ] Start frontend / web app
-- [ ] Figure out if we need a thermal inertia predictor
-- [ ] Add more models as needed
+- [ ] Fix the ti variance and temp variation predictors, holy they are buns rn

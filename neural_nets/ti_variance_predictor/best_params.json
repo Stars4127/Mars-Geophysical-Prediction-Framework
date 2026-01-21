@@ -1,0 +1,6 @@
+{
+  "layers": 3,
+  "units": 16,
+  "activation": "tanh",
+  "lr": 0.0063270582254649765
+}

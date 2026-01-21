@@ -1,0 +1,6 @@
+{
+  "layers": 2,
+  "units": 48,
+  "activation": "relu",
+  "lr": 0.003927523359333243
+}

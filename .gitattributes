@@ -5,5 +5,6 @@
 *.py text eol=lf
 *.bat text eol=crlf
 *.ps1 text eol=crlf
+datasets/*.csv filter=lfs diff=lfs merge=lfs -text
 *.parquet filter=lfs diff=lfs merge=lfs -text
 *.tif filter=lfs diff=lfs merge=lfs -text

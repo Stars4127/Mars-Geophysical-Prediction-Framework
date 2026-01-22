@@ -10,3 +10,4 @@ __pycache__/
 
 datasets/*
 !datasets/core_set_2ppd.csv
+!datasets/8ppd_core_features.csv

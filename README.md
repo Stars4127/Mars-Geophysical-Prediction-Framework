@@ -8,7 +8,7 @@ The final product will be deployed as a web application or interactive map, show
 ### Data Paradigm
 The project relies on a structured Mars dataset as the base for all models, following these principles:
 *   **Time-independent features**: All inputs are static or long-term averages.
-*   **Resolution Blocks**: Features are grouped by native resolution (e.g., 2 PPD) to avoid mismatched granularity.
+*   **Resolution Blocks**: Features are downscaled by JMARS to 2ppd to avoid mismatched granularity.
 *   **Independent Models**: Specific models predict hard-to-measure quantities (e.g., WEH, dust) which feed into the final score.
 
 ## Key Project Goals

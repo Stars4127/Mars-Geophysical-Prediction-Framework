@@ -328,10 +328,11 @@ if __name__ == "__main__":
             "OMEGA Est. Lambert Albedo 1080nm Ody et al 2012",
             "Dayside Thermal Inertia (20 ppd) (Putzig and Mellon 2007)",
             "Nightside Thermal Inertia (20 ppd) (Putzig and Mellon 2007)",
-            "MOLA Roughness 0.6km Baseline - Numeric"
+            "MOLA Roughness 0.6km Baseline - Numeric",
+            "MOLA Roughness 2.4km Baseline - Numeric"
         ]
     )
     predictor.preprocess()
-    predictor.tune(n_trials=25, max_epochs=10)
-    predictor.train_best(max_epochs=300)
+    # predictor.tune(n_trials=25, max_epochs=10)
+    # predictor.train_best(max_epochs=300)
     predictor.load_and_eval()

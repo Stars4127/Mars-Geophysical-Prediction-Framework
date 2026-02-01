@@ -7,7 +7,6 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
-from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import RobustScaler
 from sklearn.metrics import r2_score, mean_absolute_error
 import optuna
@@ -18,9 +17,8 @@ import optuna
 SEED = 42
 BATCH_SIZE = 1024
 ENSEMBLE_SIZE = 5
-MODEL_DIR = "neural_nets/temp_predictor"
+MODEL_DIR = "backend/models/neural_nets/temp_variation_predictor"
 PARAMS_PATH = f"{MODEL_DIR}/best_params.json"
-MODEL_PATH = f"{MODEL_DIR}/model.pt"
 
 random.seed(SEED)
 np.random.seed(SEED)
@@ -34,7 +32,7 @@ print(f"🔥 Using device: {device}")
 # =============================
 # MLP model
 # =============================
-class TempANN(nn.Module):
+class TempVariationANN(nn.Module):
     def __init__(self, input_dim, layers, units, activation):
         super().__init__()
         act_fn = nn.ReLU() if activation == "relu" else nn.Tanh()
@@ -54,23 +52,21 @@ class TempANN(nn.Module):
 # =============================
 # Predictor
 # =============================
-class TempPredictor:
-    def __init__(self, path, target_column, features, test_size=0.2):
+class TempVariationPredictor:
+    def __init__(self, path, target_column, features):
         self.path = path
         self.target_column = target_column
-        self.features = features
-        self.test_size = test_size
+        self.original_features = features.copy()
+        self.features = features.copy()
         self.scaler = RobustScaler()
         self.best_params = None
 
     # ----------------------------
     # Preprocess
     # ----------------------------
-    def preprocess(self, val_fraction=0.2):
+    def preprocess(self):
         df = pd.read_csv(self.path)
-        # Select only relevant columns BEFORE dropping NAs
-        # This prevents irrelevant empty columns from killing the dataset
-        # Select subset: We need original features + target + Latitude (for splitting)
+        
         lat_col = 'Latitude (N)'
         asp_col = 'MOLA 128ppd Aspect'
         
@@ -89,7 +85,7 @@ class TempPredictor:
                 self.features = [f for f in self.features if f != asp_col]
                 self.features.extend(['aspect_sin', 'aspect_cos'])
 
-        # Now filter df to needed columns (features, target_column, and lat_col for splitting)
+        # Filter df to needed columns
         needed_cols = list(set(self.features + [self.target_column, lat_col]))
         needed_cols = [c for c in needed_cols if c in df.columns]
         df = df[needed_cols]
@@ -103,15 +99,15 @@ class TempPredictor:
         print(f"📉 Dropped {original_len - len(df)} rows containing NaNs. Remaining: {len(df)}")
         
         if len(df) == 0:
-            raise ValueError("Dataset is empty after preprocessing! Check your features for 100% NaN columns.")
+            raise ValueError("Dataset is empty after preprocessing!")
 
         # --- Spatial Splitting by Latitude Bands ---
-        df["lat_bin"] = pd.cut(df["Latitude (N)"], bins=10)
+        df["lat_bin"] = pd.cut(df[lat_col], bins=10)
         unique_bins = sorted(df["lat_bin"].unique().tolist())
         
-        import random as rnd
-        rnd.seed(SEED)
-        rnd.shuffle(unique_bins)
+        # Deterministic shuffle for splitting
+        rng = random.Random(SEED)
+        rng.shuffle(unique_bins)
         
         train_bins = unique_bins[:7]
         val_bins = unique_bins[7:9]
@@ -132,10 +128,6 @@ class TempPredictor:
         
         self.y_test_raw = y_test.copy()
 
-        # self.y_train = np.log1p(y_train)
-        # self.y_val = np.log1p(y_val)
-        # self.y_test = np.log1p(y_test)
-
         self.x_train = self.scaler.fit_transform(X_train)
         self.x_val = self.scaler.transform(X_val)
         self.x_test = self.scaler.transform(X_test)
@@ -147,8 +139,7 @@ class TempPredictor:
                 torch.tensor(self.y_train, dtype=torch.float32).view(-1, 1)
             ),
             batch_size=BATCH_SIZE,
-            shuffle=True,
-            num_workers=0
+            shuffle=True
         )
 
         self.x_val_tensor = torch.tensor(self.x_val, dtype=torch.float32).to(device)
@@ -195,10 +186,9 @@ class TempPredictor:
             else:
                 patience_ctr += 1
 
-            # ----- Simple epoch logging -----
-            if trial_idx is not None:
-                print(f"[Trial {trial_idx}]")
-            print(f"Epoch {epoch + 1}/{max_epochs} | Train MSE: {epoch_loss:.4f} | Val MSE: {val_loss:.4f} | Val R²: {val_r2:.4f}")
+            # Simple logging
+            prefix = f"[Trial {trial_idx}] " if trial_idx is not None else ""
+            print(f"{prefix}Epoch {epoch + 1}/{max_epochs} | Train MSE: {epoch_loss:.4f} | Val MSE: {val_loss:.4f} | Val R²: {val_r2:.4f}")
 
             if patience_ctr >= patience:
                 print(f"⏹ Early stopping at epoch {epoch + 1}")
@@ -210,30 +200,28 @@ class TempPredictor:
         return model
 
     # ----------------------------
-    # Hyperparameter tuning (with trial logging)
+    # Hyperparameter tuning
     # ----------------------------
-    def tune(self, n_trials=25, max_epochs=10):
+    def tune(self, n_trials=25, max_epochs=15):
         def objective(trial):
             layers = trial.suggest_int("layers", 1, 4)
             units = trial.suggest_int("units", 16, 128, step=16)
             activation = trial.suggest_categorical("activation", ["relu", "tanh"])
             lr = trial.suggest_float("lr", 1e-4, 1e-2, log=True)
 
-            model = TempANN(len(self.features), layers, units, activation).to(device)
+            model = TempVariationANN(len(self.features), layers, units, activation).to(device)
             self._train(model, lr=lr, max_epochs=max_epochs, trial_idx=trial.number)
 
-            # Evaluate on validation
             model.eval()
             with torch.no_grad():
                 preds = model(self.x_val_tensor).cpu().numpy().flatten()
             r2 = r2_score(self.y_val, preds)
-            return -r2  # maximize r2
+            return r2  # Optuna defaults to minimize, so we'll return r2 and set direction to maximize
 
-        study = optuna.create_study()
+        study = optuna.create_study(direction="maximize")
         study.optimize(objective, n_trials=n_trials)
         self.best_params = study.best_params
 
-        # Save best params
         with open(PARAMS_PATH, 'w') as f:
             json.dump(self.best_params, f, indent=2)
         print("✅ Best params saved:", self.best_params)
@@ -254,14 +242,10 @@ class TempPredictor:
         activation = params["activation"]
 
         print(f"🚀 Training Ensemble of {ENSEMBLE_SIZE} models...")
-        # Ensure MODEL_DIR exists
-        os.makedirs(MODEL_DIR, exist_ok=True)
-
         for i in range(ENSEMBLE_SIZE):
             print(f"\n--- Training Member {i+1}/{ENSEMBLE_SIZE} ---")
             torch.manual_seed(SEED + i)
-            
-            model = TempANN(len(self.features), layers, units, activation)
+            model = TempVariationANN(len(self.features), layers, units, activation)
             model = self._train(model, lr, max_epochs=max_epochs)
             
             save_path = f"{MODEL_DIR}/model_{i}.pt"
@@ -269,40 +253,28 @@ class TempPredictor:
             print(f"✅ Member {i+1} saved to {save_path}")
 
         print(f"💾 Ensemble training complete in {MODEL_DIR}")
-        # self.model is set to the last trained model, but for ensemble,
-        # individual models are loaded during evaluation.
-        self.model = model 
 
     # ----------------------------
     # Load and evaluate (Ensemble)
     # ----------------------------
     def load_and_eval(self):
         if not os.path.exists(PARAMS_PATH):
-            raise FileNotFoundError("No best params found. Run tune() first.")
+            raise FileNotFoundError("No best params found.")
         
         with open(PARAMS_PATH) as f:
             params = json.load(f)
 
         all_preds = []
-        print(f"🔍 Loading Ensemble of {ENSEMBLE_SIZE} models from {MODEL_DIR}...")
-
         for i in range(ENSEMBLE_SIZE):
-            model = TempANN(len(self.features), params["layers"], params["units"], params["activation"]).to(device)
+            model = TempVariationANN(len(self.features), params["layers"], params["units"], params["activation"]).to(device)
             save_path = f"{MODEL_DIR}/model_{i}.pt"
-            if not os.path.exists(save_path):
-                raise FileNotFoundError(f"Ensemble member {i} not found at {save_path}. Run train_best() first.")
-            
             model.load_state_dict(torch.load(save_path, map_location=device, weights_only=True))
             model.eval()
-            
             with torch.no_grad():
                 p = model(self.x_test_tensor).cpu().numpy().flatten()
                 all_preds.append(p)
 
-        # Stack predictions
         preds_stack = np.stack(all_preds)
-        
-        # Calculate ensemble stats
         mean_pred = preds_stack.mean(0)
         uncertainty = preds_stack.std(0)
 
@@ -319,12 +291,14 @@ class TempPredictor:
 # Usage
 # =============================
 if __name__ == "__main__":
-    predictor = TempPredictor(
-        path="datasets/core_set_2ppd.csv",
-        target_column='Yearly Average Mars Surface Temperature (C)',
+    predictor = TempVariationPredictor(
+        path="backend/models/datasets/core_set_2ppd.csv",
+        target_column='Yearly Mars Surface Temperature Variation (C)',
         features=[
             "Latitude (N)",
             "MOLA 128ppd Elevation",
+            "MOLA 128ppd Slope",
+            "MOLA 128ppd Aspect",
             "OMEGA Est. Lambert Albedo 1080nm Ody et al 2012",
             "Dayside Thermal Inertia (20 ppd) (Putzig and Mellon 2007)",
             "Nightside Thermal Inertia (20 ppd) (Putzig and Mellon 2007)",
@@ -332,6 +306,6 @@ if __name__ == "__main__":
         ]
     )
     predictor.preprocess()
-    predictor.tune(n_trials=25, max_epochs=10)
-    predictor.train_best(max_epochs=300)
+    #predictor.tune(n_trials=25, max_epochs=15)
+    #predictor.train_best(max_epochs=300)
     predictor.load_and_eval()

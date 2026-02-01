@@ -1,7 +1,7 @@
 
 import csv
 
-FILE_PATH = 'datasets/core_set_2ppd.csv'
+FILE_PATH = 'backend/models/datasets/core_set_2ppd.csv'
 LOG_PATH = 'csv_errors.txt'
 
 def scan_for_errors():

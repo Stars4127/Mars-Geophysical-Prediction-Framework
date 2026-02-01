@@ -18,7 +18,7 @@ import optuna
 SEED = 42
 BATCH_SIZE = 1024
 ENSEMBLE_SIZE = 5
-MODEL_DIR = "neural_nets/gravity_predictor"
+MODEL_DIR = "backend/models/neural_nets/gravity_predictor"
 PARAMS_PATH = f"{MODEL_DIR}/best_params.json"
 
 random.seed(SEED)
@@ -303,7 +303,7 @@ class GravityPredictor:
 
 def main():
     predictor = GravityPredictor(
-        csv_path="datasets/core_set_2ppd.csv",
+        csv_path="backend/models/datasets/core_set_2ppd.csv",
         target="Mars Bouguer Gravity Anomaly",
         features=[
             'MOLA 128ppd Elevation',

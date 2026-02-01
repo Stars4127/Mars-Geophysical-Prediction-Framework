@@ -8,6 +8,6 @@
 __pycache__/
 *.py[cod]
 
-datasets/*
-!datasets/core_set_2ppd.csv
-!datasets/8ppd_core_features.csv
+backend/models/datasets/*
+!backend/models/datasets/core_set_2ppd.csv
+!backend/models/datasets/8ppd_core_features_for_mapping.csv

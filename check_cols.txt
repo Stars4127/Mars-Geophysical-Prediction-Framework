@@ -1,0 +1,16 @@
+OID
+Latitude (N)
+Longitude (E)
+MOLA 128ppd Aspect
+MOLA 128ppd Elevation
+MOLA 128ppd Slope
+MOLA Roughness 0.6km Baseline - Numeric
+MOLA Roughness 2.4km Baseline - Numeric
+Dayside Thermal Inertia (20 ppd) (Putzig and Mellon 2007)
+Nightside Thermal Inertia (20 ppd) (Putzig and Mellon 2007)
+OMEGA Est. Lambert Albedo 1080nm
+ Ody et al 2012
+TES Andesite Abundance - Numeric
+TES Basalt Abundance - Numeric
+TES Rock Abundance (Nowicki and Christensen 2007) - Numeric
+Mars Crustal Thickness (GSFC)

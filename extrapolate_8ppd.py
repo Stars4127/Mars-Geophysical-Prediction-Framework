@@ -64,7 +64,7 @@ MODELS_INFO = [
     },
     {
         "name": "Surface_Temp",
-        "dir": "backend/models/neural_nets/temp_predictor", # Matches directory in file list
+        "dir": "backend/models/neural_nets/temp_predictor",
         "target": "Yearly Average Mars Surface Temperature (C)",
         "features": [
             "Latitude (N)",
@@ -72,7 +72,8 @@ MODELS_INFO = [
             "OMEGA Est. Lambert Albedo 1080nm Ody et al 2012",
             "Dayside Thermal Inertia (20 ppd) (Putzig and Mellon 2007)",
             "Nightside Thermal Inertia (20 ppd) (Putzig and Mellon 2007)",
-            "MOLA Roughness 0.6km Baseline - Numeric"
+            "MOLA Roughness 0.6km Baseline - Numeric",
+            "MOLA Roughness 2.4km Baseline - Numeric"
         ]
     },
     {
@@ -125,13 +126,6 @@ MODELS_INFO = [
     }
 ]
 
-# Features missing from 8ppd set that must be pulled from 2ppd
-MISSING_FEATURES = [
-    "OMEGA Est. Lambert Albedo 1080nm Ody et al 2012",
-    "TES Basalt Abundance - Numeric",
-    "TES Andesite Abundance - Numeric"
-]
-
 def engineer_features(df, features_list):
     """Encodes Latitude and Aspect if present in features_list."""
     out_features = features_list.copy()
@@ -155,19 +149,11 @@ def engineer_features(df, features_list):
     return df, out_features
 
 def main():
-    print("🚀 Starting 8ppd Extrapolation...")
+    print("🚀 Starting 8ppd Extrapolation (Direct Native Mode)...")
     
-    # 1. Load 2ppd data for scalers and missing feature lookup
-    print("📖 Loading 2ppd data...")
+    # 1. Load 2ppd data ONLY for fitting scalers
+    print("📖 Loading 2ppd data for scaler fitting...")
     df_2ppd = pd.read_csv(CORE_2PPD_PATH, na_values=['null', 'Null', 'NULL'])
-    
-    # Create lookup for missing features
-    # Rounding to 0.5 resolution (2ppd)
-    df_2ppd['lat_round'] = (df_2ppd['Latitude (N)'] * 2).round() / 2
-    df_2ppd['lon_round'] = (df_2ppd['Longitude (E)'] * 2).round() / 2
-    
-    # Handle TI_Variance target if needed for scaler training (though target doesn't affect feature scaler)
-    # Actually we just need features for the scalers.
     
     # Prepare Scalers and Models
     for info in MODELS_INFO:
@@ -179,7 +165,6 @@ def main():
             info['params'] = json.load(f)
             
         # Fit Scaler on 2ppd data
-        # We need to replicate the preprocessing of the original scripts
         temp_df = df_2ppd.copy()
         
         if info['name'] == "TI_Variance":
@@ -210,33 +195,46 @@ def main():
                 activation=info['params']['activation']
             ).to(DEVICE)
             model_path = os.path.join(info['dir'], f"model_{i}.pt")
-            model.load_state_dict(torch.load(model_path, map_location=DEVICE, weights_only=True))
+            state_dict = torch.load(model_path, map_location=DEVICE, weights_only=True)
+            
+            # Standardize state dict keys (handle mix of 'net.' and 'model.' prefixes)
+            new_state_dict = {k.replace("net.", "model."): v for k, v in state_dict.items()}
+            
+            model.load_state_dict(new_state_dict)
             model.eval()
             info['models'].append(model)
 
-    # 2. Process 8ppd data in chunks
+    # 2. Process 8ppd data in chunks (No more lookup needed!)
     print(f"📖 Reading 8ppd features from {FEATURES_8PPD_PATH}...")
     chunk_size = 500000
     reader = pd.read_csv(FEATURES_8PPD_PATH, chunksize=chunk_size)
     
     first_chunk = True
     
-    # Prepare 2ppd lookup table for missing features
-    lookup_df = df_2ppd.groupby(['lat_round', 'lon_round'])[MISSING_FEATURES].mean().reset_index()
+    # Column mapping to fix potentially broken headers in 8ppd
+    column_rename_map = {
+        "OMEGA Est. Lambert Albedo 1080nm": "OMEGA Est. Lambert Albedo 1080nm Ody et al 2012"
+        # The split part " Ody et al 2012" will be ignored
+    }
 
     for chunk in tqdm(reader, desc="Processing chunks"):
-        # Fill missing features by merging with lookup
-        chunk['lat_round'] = (chunk['Latitude (N)'] * 2).round() / 2
-        chunk['lon_round'] = (chunk['Longitude (E)'] * 2).round() / 2
+        # Rename columns to match 2ppd expected headers
+        chunk = chunk.rename(columns=column_rename_map)
         
-        chunk = pd.merge(chunk, lookup_df, on=['lat_round', 'lon_round'], how='left')
+        # Clean up: Ensure all needed columns are numeric
+        for info in MODELS_INFO:
+            for f in info['features']:
+                if f in chunk.columns:
+                    chunk[f] = pd.to_numeric(chunk[f], errors='coerce')
         
-        # For any still missing (NaN after merge), fill with global 2ppd mean
-        for col in MISSING_FEATURES:
-            if chunk[col].isna().any():
-                chunk[col] = chunk[col].fillna(df_2ppd[col].mean())
-
-        results_chunk = chunk[['OID', 'Latitude (N)', 'Longitude (E)']].copy()
+        # Drop rows with NaNs in features (important for mapping consistency)
+        # Note: If we have missing data in 8ppd, we should ideally handle it,
+        # but the user says the features are now all there.
+        
+        # Prepare results chunk
+        results_chunk = pd.DataFrame()
+        results_chunk['Lat'] = chunk['Latitude (N)']
+        results_chunk['Lon'] = chunk['Longitude (E)']
         
         # Predict for each model
         for info in MODELS_INFO:
@@ -258,8 +256,8 @@ def main():
             std_pred = preds_stack.std(0)
             
             # Add to results
-            results_chunk[f"{info['target']}"] = mean_pred
-            results_chunk[f"{info['target']}_Uncertainty"] = std_pred
+            results_chunk[f"{info['name']}"] = mean_pred
+            results_chunk[f"{info['name']}_Uncertainty"] = std_pred
             
         # Write to CSV
         mode = 'w' if first_chunk else 'a'

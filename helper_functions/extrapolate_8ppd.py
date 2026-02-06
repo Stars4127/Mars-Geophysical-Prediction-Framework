@@ -221,15 +221,16 @@ def main():
         # Rename columns to match 2ppd expected headers
         chunk = chunk.rename(columns=column_rename_map)
         
-        # Clean up: Ensure all needed columns are numeric
+        # Clean up: Ensure all needed columns are numeric and handle NaNs
+        # We fill NaNs with column medians for robustness, so gaps in one sensor 
+        # (like Albedo) don't break the prediction for other sensors.
         for info in MODELS_INFO:
             for f in info['features']:
                 if f in chunk.columns:
                     chunk[f] = pd.to_numeric(chunk[f], errors='coerce')
-        
-        # Drop rows with NaNs in features (important for mapping consistency)
-        # Note: If we have missing data in 8ppd, we should ideally handle it,
-        # but the user says the features are now all there.
+                    # Fill NaNs with median if still present
+                    if chunk[f].isna().any():
+                        chunk[f] = chunk[f].fillna(chunk[f].median() if not chunk[f].isna().all() else 0)
         
         # Prepare results chunk
         results_chunk = pd.DataFrame()

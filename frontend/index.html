@@ -3,38 +3,251 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Mars Tile Map</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nova Scope - Mars Landing Site Optimizer</title>
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
         integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <!-- Google Fonts -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@300;600;900&display=swap"
+        rel="stylesheet">
 
     <style>
+        :root {
+            --primary: #ff4d4d;
+            --accent: #00ffcc;
+            --bg: #0a0a0c;
+            --sidebar-bg: rgba(20, 20, 25, 0.85);
+            --text: #ffffff;
+            --font-main: 'Inter', sans-serif;
+            --font-heading: 'Outfit', sans-serif;
+        }
+
         body,
         html {
             margin: 0;
             padding: 0;
             height: 100%;
-            background: #1a1a1a;
+            overflow: hidden;
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--font-main);
+        }
+
+        #app-container {
+            display: flex;
+            width: 100%;
+            height: 100%;
         }
 
         #map {
-            width: 100%;
+            flex-grow: 1;
             height: 100%;
             background: #000;
+        }
+
+        /* Sidebar Styling */
+        #sidebar {
+            width: 320px;
+            background: var(--sidebar-bg);
+            backdrop-filter: blur(15px);
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            z-index: 1000;
+            box-shadow: 10px 0 30px rgba(0, 0, 0, 0.5);
+        }
+
+        h1 {
+            font-family: var(--font-heading);
+            font-weight: 900;
+            font-size: 24px;
+            margin: 0;
+            letter-spacing: -0.5px;
+            background: linear-gradient(90deg, #ff4d4d, #ff9966);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            font-size: 12px;
+            opacity: 0.6;
+            margin-top: -15px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .label-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        label {
+            font-size: 13px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .weight-val {
+            font-family: monospace;
+            color: var(--accent);
+            font-size: 14px;
+        }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+
+        input[type=range]:focus {
+            outline: none;
+        }
+
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            height: 18px;
+            width: 18px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -6px;
+            box-shadow: 0 0 10px rgba(255, 77, 77, 0.5);
+            transition: transform 0.2s;
+        }
+
+        input[type=range]:active::-webkit-slider-thumb {
+            transform: scale(1.2);
+        }
+
+        .legend {
+            margin-top: auto;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 12px;
+        }
+
+        .legend-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 5px;
+        }
+
+        .grad {
+            width: 100%;
+            height: 8px;
+            background: linear-gradient(90deg, #d7191c, #fdae61, #ffffbf, #a6d96a, #1a9641);
+            border-radius: 4px;
+            margin: 8px 0;
+        }
+
+        .legend-text {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            opacity: 0.7;
+        }
+
+        /* Leaflet Customization */
+        .leaflet-container {
+            background: #000 !important;
         }
     </style>
 </head>
 
 <body>
-    <div id="map"></div>
+    <div id="app-container">
+        <aside id="sidebar">
+            <h1>NOVA SCOPE</h1>
+            <p class="subtitle">Mars Site Optimizer</p>
+
+            <!-- Sliders -->
+            <div class="control-group">
+                <div class="label-row">
+                    <label>Water (WEH%)</label>
+                    <span class="weight-val" id="val-water">1.0</span>
+                </div>
+                <input type="range" id="weight-water" min="0" max="1" step="0.05" value="1.0">
+            </div>
+
+            <div class="control-group">
+                <div class="label-row">
+                    <label>Dust Content</label>
+                    <span class="weight-val" id="val-dust">0.0</span>
+                </div>
+                <input type="range" id="weight-dust" min="0" max="1" step="0.05" value="0.0">
+            </div>
+
+            <div class="control-group">
+                <div class="label-row">
+                    <label>Surface Temp</label>
+                    <span class="weight-val" id="val-temp">0.0</span>
+                </div>
+                <input type="range" id="weight-temp" min="0" max="1" step="0.05" value="0.0">
+            </div>
+
+            <div class="control-group">
+                <div class="label-row">
+                    <label>Temp Variation</label>
+                    <span class="weight-val" id="val-temp-var">0.0</span>
+                </div>
+                <input type="range" id="weight-temp-var" min="0" max="1" step="0.05" value="0.0">
+            </div>
+
+            <div class="control-group">
+                <div class="label-row">
+                    <label>Gravity Anomaly</label>
+                    <span class="weight-val" id="val-gravity">0.0</span>
+                </div>
+                <input type="range" id="weight-gravity" min="0" max="1" step="0.05" value="0.0">
+            </div>
+
+            <div class="control-group">
+                <div class="label-row">
+                    <label>TI Variance</label>
+                    <span class="weight-val" id="val-ti-var">0.0</span>
+                </div>
+                <input type="range" id="weight-ti-var" min="0" max="1" step="0.05" value="0.0">
+            </div>
+
+            <div class="legend">
+                <div class="legend-row"><strong>Landing Suitability</strong></div>
+                <div class="grad"></div>
+                <div class="legend-text">
+                    <span>Low (Poor)</span>
+                    <span>High (Optimal)</span>
+                </div>
+            </div>
+        </aside>
+
+        <div id="map"></div>
+    </div>
 
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
     <script>
-        // Initialize the map centered on typical Mars coordinates (0,0)
-        // Set min/max zoom to match what the keys support effectively
         const southWest = L.latLng(-90, -180),
             northEast = L.latLng(90, 180),
             bounds = L.latLngBounds(southWest, northEast);
@@ -44,71 +257,87 @@
             center: [0, 0],
             zoom: 2,
             minZoom: 0,
-            maxZoom: 6, // Locked to match downloaded cache
+            maxZoom: 6,
             maxBounds: bounds,
             maxBoundsViscosity: 1.0,
             attributionControl: false,
-            zoomSnap: 0.1, // Allow fractional zooms to fit screen perfectly
-            zoomDelta: 0.5,
-            wheelPxPerZoomLevel: 120, // Higher = slower zoom (default is 60)
-            wheelDebounceTime: 40     // Smoother wheel handling
+            zoomSnap: 0.1
         });
 
-        // Function to fit map to screen so it COVERS the viewport (no black bars)
+        // Function to fit map
         function fitMapToScreen() {
             const container = map.getSize();
-            // Map logic: z0 is 512w x 256h pixels
-            // At zoom z: width = 512 * 2^z, height = 256 * 2^z
-
-            // Calculate zoom needed to fill height
             const minZoomH = Math.log2(container.y / 256);
-            // Calculate zoom needed to fill width
             const minZoomW = Math.log2(container.x / 512);
-
-            // "Cover" behavior: take the larger of the two required zooms
-            // This ensures BOTH dimensions are at least as big as the screen
             const fitZoom = Math.max(minZoomH, minZoomW);
-
             map.setMinZoom(fitZoom);
-
-            // If we are currently zoomed out too far, snap in
-            if (map.getZoom() < fitZoom) {
-                map.setZoom(fitZoom);
-            }
+            if (map.getZoom() < fitZoom) map.setZoom(fitZoom);
         }
 
-        // Apply fit on load and resize
         fitMapToScreen();
         window.addEventListener('resize', fitMapToScreen);
 
-        // Add the Tile Layer pointing to your local Python Proxy
-        // L.tileLayer template: {z}, {x}, {y} are automatically filled by Leaflet
-        // 'tms: false' is standard for XYZ (Google/OSM style). 
-        // If tiles look "wrong" (scrambled vertically), we might need tms: true or Y-inversion.
-        // NASA Mars Viking Mosaic usually supports up to level 9 approx.
-        // We use maxNativeZoom: 9 so that if you zoom to 12, it scales the level 9 tiles.
-        const tileLayer = L.tileLayer('http://127.0.0.1:8000/tiles/{z}/{x}/{y}.jpg', {
+        // Base Map Layer (Local Proxy)
+        const baseLayer = L.tileLayer('http://127.0.0.1:8000/tiles/{z}/{x}/{y}.jpg', {
             maxZoom: 12,
-            maxNativeZoom: 9, // IMPORTANT: Prevents loading non-existent high-res tiles
+            maxNativeZoom: 6,
             minZoom: 0,
-            noWrap: true,     // IMPORTANT: Prevents the map from repeating horizontally
+            noWrap: true,
             bounds: bounds,
             tileSize: 256,
-            keepBuffer: 2,    // Keep 2 rows of tiles around the view to smooth panning
-            updateWhenIdle: false, // Update during pan for smoother feel
             className: 'mars-tiles'
         }).addTo(map);
 
-        // Add a scale control (optional, but cool for maps)
+        // Heatmap Layer
+        let currentHeatmap = null;
+
+        function updateHeatmap() {
+            const weights = {
+                water: document.getElementById('weight-water').value,
+                dust: document.getElementById('weight-dust').value,
+                temp: document.getElementById('weight-temp').value,
+                temp_var: document.getElementById('weight-temp-var').value,
+                gravity: document.getElementById('weight-gravity').value,
+                ti_var: document.getElementById('weight-ti-var').value
+            };
+
+            // Update UI values
+            document.getElementById('val-water').innerText = weights.water;
+            document.getElementById('val-dust').innerText = weights.dust;
+            document.getElementById('val-temp').innerText = weights.temp;
+            document.getElementById('val-temp-var').innerText = weights.temp_var;
+            document.getElementById('val-gravity').innerText = weights.gravity;
+            document.getElementById('val-ti-var').innerText = weights.ti_var;
+
+            const url = `http://127.0.0.1:8000/api/v1/heatmap/{z}/{x}/{y}.png?water=${weights.water}&dust=${weights.dust}&temp=${weights.temp}&temp_var=${weights.temp_var}&gravity=${weights.gravity}&ti_var=${weights.ti_var}`;
+
+            if (currentHeatmap) {
+                map.removeLayer(currentHeatmap);
+            }
+
+            currentHeatmap = L.tileLayer(url, {
+                maxZoom: 12,
+                maxNativeZoom: 6,
+                minZoom: 0,
+                noWrap: true,
+                bounds: bounds,
+                tileSize: 256,
+                opacity: 0.8,
+                zIndex: 10
+            }).addTo(map);
+        }
+
+        // Event listeners for sliders
+        const sliders = ['water', 'dust', 'temp', 'temp-var', 'gravity', 'ti-var'];
+        sliders.forEach(id => {
+            document.getElementById(`weight-${id}`).addEventListener('input', updateHeatmap);
+        });
+
+        // Initialize first heatmap
+        updateHeatmap();
+
         L.control.scale().addTo(map);
 
-        // Debug: Log tile usage to console
-        map.on('tileload', function (e) {
-            console.log('Loaded tile:', e.coords);
-        });
-        map.on('tileerror', function (e) {
-            console.warn('Failed tile:', e.coords);
-        });
     </script>
 </body>
 

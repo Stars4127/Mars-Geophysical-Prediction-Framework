@@ -10,6 +10,14 @@ class NovaEngine:
         self.df = None
         self.tree = None
         self.normalized_data = {}
+        self.last_global_stats = {
+            "weights": None,
+            "min": 0.0,
+            "max": 1.0,
+            "p5": 0.0,
+            "p95": 1.0,
+            "total_weight": 1.0
+        }
         self.load_data()
 
     def load_data(self):
@@ -102,11 +110,25 @@ class NovaEngine:
                     if unc_feat in self.normalized_data:
                         goodness -= self.normalized_data[unc_feat].values * penalty_weight
 
-            # --- Normalize 0-100 for display ---
+            # Cache the global stats for this weight set to ensure consistent tile rendering
             if total_weight > 0:
                 g_min, g_max = float(goodness.min()), float(goodness.max())
-                if g_max > g_min:
-                    goodness = 100 * (goodness - g_min) / (g_max - g_min)
+                p5, p95 = np.percentile(goodness, [5, 95])
+                self.last_global_stats = {
+                    "weights": weights.copy(),
+                    "min": g_min,
+                    "max": g_max,
+                    "p5": p5,
+                    "p95": p95,
+                    "total_weight": total_weight
+                }
+            
+            # --- Normalize 0-100 for display ---
+            if total_weight > 0:
+                # Use the p5/p95 stats for the display normalization too for consistency
+                stats = self.last_global_stats
+                goodness = 100 * (goodness - stats['p5']) / (stats['p95'] - stats['p5'] + 1e-6)
+                goodness = np.clip(goodness, 0, 100)
 
             # --- Prepare subset for JSON/leaflet ---
             step = 500
@@ -182,13 +204,21 @@ class NovaEngine:
         from scipy.ndimage import gaussian_filter
         import io
 
+        # --- 0. Global Stats Synchronization Guard ---
+        # If the weights have changed since the last global calculation, or if stats are missing,
+        # we MUST recompute them before rendering ANY tile to ensure absolute color consistency.
+        if self.last_global_stats['weights'] != weights:
+            print("⚠️ Tile Engine: Global stats outdated for requested weights. Synchronizing...")
+            self.calculate_goodness(weights)
+            
+        stats = self.last_global_stats
+
         # --- 1. Tile Context & Buffered Bounds ---
-        # Get base bounds for a 256x256 tile
         min_lon, max_lon, min_lat, max_lat = self.get_tile_bounds(z, x, y)
         
-        # Define smoothing parameters (as per user instructions)
-        sigma = 2.5
-        pad = int(4 * sigma) # 10 pixels of context to ensure seamless blending
+        # Smooth cap to avoid excessive dilution
+        sigma = min(3.0, 1.5 + z * 0.5) 
+        pad = int(4 * sigma) # context to ensure seamless blending
         
         # Calculate degrees per pixel for the query expansion
         deg_per_px_x = (max_lon - min_lon) / 256.0
@@ -224,7 +254,7 @@ class NovaEngine:
                 weight = float(weight_val)
                 if feat in subset.columns:
                     val = self.normalized_data[feat].values[mask]
-                    goodness += val * weight
+                    goodness += val * weight # Using raw weights here, mapping to global scale later
                     total_weight += abs(weight)
                     
                     unc_feat = f"{feat}_Uncertainty"
@@ -232,15 +262,16 @@ class NovaEngine:
                         u_val = self.normalized_data[unc_feat].values[mask]
                         goodness -= u_val * penalty_weight
 
-        # Global Normalization (consistent across all tiles)
-        if total_weight > 0:
-            goodness = goodness / total_weight
+        # Global Absolute Normalization
+        # Instead of local tile normalization, we map the goodness scores to the GLOBAL range
+        # captured in last_global_stats. This ensures "Green" is the same value everywhere.
+        goodness = (goodness - stats['p5']) / (stats['p95'] - stats['p5'] + 1e-6)
         goodness = np.clip(goodness, 0, 1)
 
-        # --- 3. Padded Grid Creation & Point Injection ---
+        # --- 3. Grid Creation, Smoothing & Cropping ---
         grid_dim = 256 + 2 * pad
-        grid = np.zeros((grid_dim, grid_dim))
-        count = np.zeros((grid_dim, grid_dim))
+        grid_sum = np.zeros((grid_dim, grid_dim))
+        grid_count = np.zeros((grid_dim, grid_dim))
         
         # Map relative to the PADDED bounds
         pixel_x = ((subset['Lon'].values - q_min_lon) / (q_max_lon - q_min_lon) * grid_dim).astype(int)
@@ -249,30 +280,38 @@ class NovaEngine:
         pixel_x = np.clip(pixel_x, 0, grid_dim - 1)
         pixel_y = np.clip(pixel_y, 0, grid_dim - 1)
 
-        np.add.at(grid, (pixel_y, pixel_x), goodness)
-        np.add.at(count, (pixel_y, pixel_x), 1)
+        # Injected normalized goodness onto the grid
+        np.add.at(grid_sum, (pixel_y, pixel_x), goodness)
+        np.add.at(grid_count, (pixel_y, pixel_x), 1)
 
-        # Average grid values before smoothing for accuracy
+        # Weighted Smoothing: Smooth the sums and counts separately
+        # This prevents "dilution" at the edges behavior where a high-value point 
+        # gets averaged with zero-value backgrounds early.
+        sum_smoothed = gaussian_filter(grid_sum, sigma=sigma)
+        count_smoothed = gaussian_filter(grid_count, sigma=sigma)
+
+        # Recalculate Average AFTER smoothing (this spreads the color intensity properly)
         with np.errstate(divide='ignore', invalid='ignore'):
-            grid = grid / (count + 0.000001)
-            grid[count == 0] = 0
-        
-        # --- 4. Smooth on Extended Context & Crop ---
-        grid_smoothed = gaussian_filter(grid, sigma=sigma)
-        count_smoothed = gaussian_filter(count, sigma=sigma)
+            final_grid = sum_smoothed / (count_smoothed + 1e-6)
+            final_grid = np.nan_to_num(final_grid)
+            final_grid = np.clip(final_grid, 0, 1)
 
-        # Crop back to the central 256x256 region
-        final_grid = grid_smoothed[pad:pad+256, pad:pad+256]
+        # Crop back to 256x256
+        final_grid = final_grid[pad:pad+256, pad:pad+256]
         final_count = count_smoothed[pad:pad+256, pad:pad+256]
 
-        # --- 5. Rendering & Alpha ---
-        mask_visibility = (final_count > 0.005)
+        # --- 4. Rendering & Alpha ---
+        # Fixed alpha multiplier for stability
+        alpha_mult = 4.0
+        mask_threshold = 0.005
+        
+        mask_visibility = (final_count > mask_threshold)
         cmap = plt.get_cmap('RdYlGn')
         rgba_img = cmap(final_grid)
 
-        # Compute alpha from the counts inside this tile
-        # Cap alpha at 0.9 as per instructions
-        alpha_channel = np.clip(final_count * 4.0, 0, 0.9)
+        # Apply alpha floor based on density to prevent vanishing at high zoom
+        # We ensure a minimum alpha of 0.3 where data is present (mask_visibility).
+        alpha_channel = np.clip(final_count * alpha_mult, 0.3, 0.9)
         alpha_channel[~mask_visibility] = 0
         rgba_img[..., 3] = alpha_channel
 
@@ -285,4 +324,3 @@ class NovaEngine:
 
 # Singleton instance
 engine = NovaEngine()
-

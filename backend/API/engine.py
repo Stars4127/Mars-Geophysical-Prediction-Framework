@@ -75,8 +75,27 @@ class NovaEngine:
             for feat, weight_val in weights.items():
                 if feat in self.normalized_data and "_Uncertainty" not in feat:
                     weight = float(weight_val)
-                    # Use the pre-normalized Series
-                    goodness += self.normalized_data[feat].values * weight
+                    val = self.normalized_data[feat].values
+                    
+                    # Apply Non-Linear suitability profiles (Mirroring tile logic)
+                    if feat == "Water":
+                        score = val / (val + 0.15)
+                    elif feat == "Dust":
+                        score = 1.0 - val
+                    elif feat == "Surface_Temp":
+                        diff = val - 0.7
+                        score = np.where(diff < 0, 
+                                         np.exp(-(diff**2) / 0.02), 
+                                         np.exp(-(diff**2) / 0.12))
+                    elif feat in ["Temp_Variation", "TI_Variance"]:
+                        regional_mean = val.mean()
+                        score = 1.0 - np.clip(np.abs(val - regional_mean) * 3.0, 0, 1)
+                    elif feat == "Gravity":
+                        score = np.exp(-((val - 0.5)**2) / 0.02)
+                    else:
+                        score = val
+
+                    goodness += score * weight
                     total_weight += abs(weight)
                     
                     # Apply uncertainty penalty for this specific feature
@@ -212,16 +231,32 @@ class NovaEngine:
                 # Or just do the math again.
                 
                 if feat in subset.columns:
-                    # Get global min/max
-                    # This is slightly inefficient but safe. 
-                    # Better: self.normalized_data is a dict of Series (aligned with self.df).
-                    # So we can index it.
-                    global_norm_series = self.normalized_data[feat] # This is a Series/Array matching len(df)
-                    # We need the values corresponding to 'mask'
-                    # Boolean indexing on the numpy array
+                    global_norm_series = self.normalized_data[feat]
                     val = global_norm_series.values[mask]
                     
-                    goodness += val * weight
+                    # Apply Non-Linear suitability profiles
+                    if feat == "Water":
+                        score = val / (val + 0.15) 
+                    elif feat == "Dust":
+                        score = 1.0 - val
+                    elif feat == "Surface_Temp":
+                        # Asymmetric windowed penalty centered at 0.7
+                        # Stronger drop for Cold (val < 0.7), Weaker for Hot (val > 0.7)
+                        diff = val - 0.7
+                        score = np.where(diff < 0, 
+                                         np.exp(-(diff**2) / 0.02), # Sharp drop (Cold)
+                                         np.exp(-(diff**2) / 0.12)) # Gentle drop (Hot)
+                    elif feat in ["Temp_Variation", "TI_Variance"]:
+                        # Penalize if much different from regional norm
+                        regional_mean = val.mean()
+                        # Score is 1.0 at mean, drops as it deviates
+                        score = 1.0 - np.clip(np.abs(val - regional_mean) * 3.0, 0, 1)
+                    elif feat == "Gravity":
+                        score = np.exp(-((val - 0.5)**2) / 0.02)
+                    else:
+                        score = val
+
+                    goodness += score * weight
                     total_weight += abs(weight)
                     
                     unc_feat = f"{feat}_Uncertainty"
@@ -267,9 +302,7 @@ class NovaEngine:
         # Clip to 0-1
         goodness = np.clip(goodness, 0, 1)
 
-        # Create 2D Histogram (Heatmap)
         # We map Lat/Lon to 0-256 pixel coordinates
-        
         pixel_x = ((subset['Lon'].values - min_lon) / (max_lon - min_lon) * 256).astype(int)
         pixel_y = ((max_lat - subset['Lat'].values) / (max_lat - min_lat) * 256).astype(int) 
         
@@ -278,38 +311,46 @@ class NovaEngine:
         pixel_y = np.clip(pixel_y, 0, 255)
 
         # Accumulate score in grid
-        grid = np.zeros((256, 256))
-        count = np.zeros((256, 256))
+        # We accumulate the sum of goodness and the count of points separately
+        goodness_sum_grid = np.zeros((256, 256))
+        count_grid = np.zeros((256, 256))
         
         indices = (pixel_y, pixel_x)
-        np.add.at(grid, indices, goodness)
-        np.add.at(count, indices, 1)
-        
-        with np.errstate(divide='ignore', invalid='ignore'):
-            grid = grid / count
-            grid[np.isnan(grid)] = 0
+        np.add.at(goodness_sum_grid, indices, goodness)
+        np.add.at(count_grid, indices, 1)
             
         # Point Expansion / Smoothing
         from scipy.ndimage import gaussian_filter
         
-        sigma = 1.5
-        grid_smoothed = gaussian_filter(grid, sigma=sigma)
-        count_smoothed = gaussian_filter(count, sigma=sigma)
+        sigma = 1.8 # Slightly increased for smoother interpolation
         
+        # Smooth the weights and the density independently
+        # This is the "Intensity Preserving" technique
+        # It prevents color "bleeding" from peaks into empty space
+        goodness_smoothed = gaussian_filter(goodness_sum_grid, sigma=sigma)
+        density_smoothed = gaussian_filter(count_grid, sigma=sigma)
+        
+        # Final color index: The density-normalized goodness
+        with np.errstate(divide='ignore', invalid='ignore'):
+            # The color is the average goodness in the smoothed area
+            grid_final = goodness_smoothed / density_smoothed
+            grid_final[np.isnan(grid_final)] = 0
+            
         # We re-mask based on smoothed density
-        mask_visibility = (count_smoothed > 0.005)
+        mask_visibility = (density_smoothed > 0.002)
 
         # Apply colormap
         cmap = plt.get_cmap('RdYlGn')
         
         # Grid is 0-1. Map to RGBA.
-        rgba_img = cmap(grid_smoothed) 
+        rgba_img = cmap(grid_final) 
         
         # Set Alpha based on density - VERY STRONG
         alpha_channel = rgba_img[..., 3]
         
-        # Boosted alpha: 4.0 multiplier and 0.9 cap for "very strong" look
-        alpha_channel[:] = np.clip(count_smoothed * 4.0, 0, 0.9)
+        # Boosted alpha: Multiply density to build opacity
+        # We use the density_smoothed to define the "cloud"
+        alpha_channel[:] = np.clip(density_smoothed * 6.0, 0, 0.75)
         
         alpha_channel[~mask_visibility] = 0
         

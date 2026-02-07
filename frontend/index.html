@@ -22,6 +22,8 @@
             --text: #ffffff;
             --font-main: 'Inter', sans-serif;
             --font-heading: 'Outfit', sans-serif;
+            --glass: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
         }
 
         body,
@@ -36,9 +38,10 @@
         }
 
         #app-container {
-            display: flex;
+            position: relative;
             width: 100%;
             height: 100%;
+            display: flex;
         }
 
         #map {
@@ -50,15 +53,49 @@
         /* Sidebar Styling */
         #sidebar {
             width: 320px;
+            height: 100%;
             background: var(--sidebar-bg);
-            backdrop-filter: blur(15px);
-            border-right: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border-right: 1px solid var(--glass-border);
+            display: flex;
+            flex-direction: column;
+            z-index: 2000;
+            box-shadow: 15px 0 50px rgba(0, 0, 0, 0.8);
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: absolute;
+            left: 0;
+            top: 0;
+        }
+
+        #sidebar.collapsed {
+            transform: translateX(-100%);
+        }
+
+        .sidebar-content {
+            flex-grow: 1;
+            overflow-y: auto;
             padding: 24px;
             display: flex;
             flex-direction: column;
-            gap: 20px;
-            z-index: 1000;
-            box-shadow: 10px 0 30px rgba(0, 0, 0, 0.5);
+            gap: 18px;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+        }
+
+        .sidebar-content::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .sidebar-content::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+        }
+
+        .sidebar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 24px 24px 0 24px;
         }
 
         h1 {
@@ -69,15 +106,100 @@
             letter-spacing: -0.5px;
             background: linear-gradient(90deg, #ff4d4d, #ff9966);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
         .subtitle {
-            font-size: 12px;
-            opacity: 0.6;
-            margin-top: -15px;
+            font-size: 11px;
+            opacity: 0.5;
+            margin: 10px 0 0 0;
             text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: 800;
+        }
+
+        #close-sidebar {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 28px;
+            cursor: pointer;
+            opacity: 0.6;
+            transition: opacity 0.2s, transform 0.2s;
+            line-height: 1;
+        }
+
+        #close-sidebar:hover {
+            opacity: 1;
+            transform: scale(1.1);
+        }
+
+        /* Recalculate Button */
+        #recalculate-btn {
+            background: linear-gradient(135deg, var(--primary), #ff9966);
+            border: none;
+            color: white;
+            padding: 14px;
+            border-radius: 8px;
+            font-family: var(--font-heading);
+            font-weight: 900;
+            font-size: 13px;
+            letter-spacing: 1.5px;
+            cursor: pointer;
+            text-transform: uppercase;
+            box-shadow: 0 4px 15px rgba(255, 77, 77, 0.3);
+            transition: all 0.3s;
+            margin-top: 10px;
+        }
+
+        #recalculate-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 77, 77, 0.5);
+            filter: brightness(1.1);
+        }
+
+        #recalculate-btn:active {
+            transform: translateY(0);
+        }
+
+        #recalculate-btn.loading {
+            opacity: 0.7;
+            pointer-events: none;
+            position: relative;
+        }
+
+        /* Toggle Button */
+        #toggle-sidebar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 1500;
+            background: var(--sidebar-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-family: var(--font-heading);
+            font-weight: 800;
+            font-size: 13px;
             letter-spacing: 1px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+            transition: all 0.3s;
+        }
+
+        #toggle-sidebar:hover {
+            background: rgba(40, 40, 50, 0.9);
+            transform: translateY(-2px);
+            border-color: var(--primary);
+        }
+
+        #toggle-sidebar.hidden {
+            opacity: 0;
+            pointer-events: none;
+            transform: translateX(-20px);
         }
 
         .control-group {
@@ -93,149 +215,190 @@
         }
 
         label {
-            font-size: 13px;
+            font-size: 11px;
             font-weight: 600;
-            color: rgba(255, 255, 255, 0.9);
+            color: rgba(255, 255, 255, 0.6);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         .weight-val {
             font-family: monospace;
             color: var(--accent);
-            font-size: 14px;
+            font-size: 13px;
+            font-weight: 800;
         }
 
         input[type=range] {
             -webkit-appearance: none;
+            appearance: none;
             width: 100%;
             background: transparent;
         }
 
-        input[type=range]:focus {
-            outline: none;
-        }
-
         input[type=range]::-webkit-slider-runnable-track {
             width: 100%;
-            height: 6px;
-            cursor: pointer;
+            height: 4px;
             background: rgba(255, 255, 255, 0.1);
-            border-radius: 3px;
+            border-radius: 2px;
         }
 
         input[type=range]::-webkit-slider-thumb {
-            height: 18px;
-            width: 18px;
+            height: 16px;
+            width: 16px;
             border-radius: 50%;
             background: var(--primary);
             cursor: pointer;
             -webkit-appearance: none;
+            appearance: none;
             margin-top: -6px;
-            box-shadow: 0 0 10px rgba(255, 77, 77, 0.5);
-            transition: transform 0.2s;
+            box-shadow: 0 0 10px rgba(255, 77, 77, 0.8);
         }
 
-        input[type=range]:active::-webkit-slider-thumb {
-            transform: scale(1.2);
+        .sidebar-footer {
+            padding: 24px;
+            border-top: 1px solid var(--glass-border);
+            background: rgba(0, 0, 0, 0.2);
         }
 
         .legend {
-            margin-top: auto;
-            background: rgba(255, 255, 255, 0.05);
-            padding: 12px;
-            border-radius: 8px;
-            font-size: 12px;
-        }
-
-        .legend-row {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 5px;
+            background: rgba(255, 255, 255, 0.03);
+            padding: 16px;
+            border-radius: 12px;
+            border: 1px solid var(--glass-border);
         }
 
         .grad {
             width: 100%;
-            height: 8px;
+            height: 6px;
             background: linear-gradient(90deg, #d7191c, #fdae61, #ffffbf, #a6d96a, #1a9641);
-            border-radius: 4px;
-            margin: 8px 0;
+            border-radius: 3px;
+            margin: 12px 0;
         }
 
         .legend-text {
             display: flex;
             justify-content: space-between;
-            font-size: 10px;
-            opacity: 0.7;
+            font-size: 9px;
+            opacity: 0.5;
+            text-transform: uppercase;
+            font-weight: 700;
         }
 
-        /* Leaflet Customization */
-        .leaflet-container {
-            background: #000 !important;
+        /* Repositioned Zoom Controls */
+        .leaflet-top.leaflet-right {
+            margin-top: 20px;
+            margin-right: 20px;
+        }
+
+        .leaflet-bar {
+            border: 1px solid var(--glass-border) !important;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4) !important;
+        }
+
+        .leaflet-bar a {
+            background-color: var(--sidebar-bg) !important;
+            color: white !important;
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--glass-border) !important;
+            width: 36px !important;
+            height: 36px !important;
+            line-height: 36px !important;
+            font-size: 18px !important;
+        }
+
+        .leaflet-bar a:hover {
+            background-color: rgba(40, 40, 50, 0.9) !important;
+            color: var(--accent) !important;
         }
     </style>
 </head>
 
 <body>
     <div id="app-container">
+        <button id="toggle-sidebar">MISSION PARAMETERS</button>
+
         <aside id="sidebar">
-            <h1>NOVA SCOPE</h1>
-            <p class="subtitle">Mars Site Optimizer</p>
-
-            <!-- Sliders -->
-            <div class="control-group">
-                <div class="label-row">
-                    <label>Water (WEH%)</label>
-                    <span class="weight-val" id="val-water">1.0</span>
+            <div class="sidebar-header">
+                <div>
+                    <h1>NOVA SCOPE</h1>
+                    <p class="subtitle">Mars Site Optimizer</p>
                 </div>
-                <input type="range" id="weight-water" min="0" max="1" step="0.05" value="1.0">
+                <button id="close-sidebar">&times;</button>
             </div>
 
-            <div class="control-group">
-                <div class="label-row">
-                    <label>Dust Content</label>
-                    <span class="weight-val" id="val-dust">0.0</span>
+            <div class="sidebar-content">
+                <!-- Sliders -->
+                <div class="control-group">
+                    <div class="label-row">
+                        <label>Water (WEH%)</label>
+                        <span class="weight-val" id="val-water">1.0</span>
+                    </div>
+                    <input type="range" id="weight-water" min="0" max="1" step="0.05" value="1.0">
                 </div>
-                <input type="range" id="weight-dust" min="0" max="1" step="0.05" value="0.0">
+
+                <div class="control-group">
+                    <div class="label-row">
+                        <label>Dust Content</label>
+                        <span class="weight-val" id="val-dust">0.0</span>
+                    </div>
+                    <input type="range" id="weight-dust" min="0" max="1" step="0.05" value="0.0">
+                </div>
+
+                <div class="control-group">
+                    <div class="label-row">
+                        <label>Surface Temp</label>
+                        <span class="weight-val" id="val-temp">0.0</span>
+                    </div>
+                    <input type="range" id="weight-temp" min="0" max="1" step="0.05" value="0.0">
+                </div>
+
+                <div class="control-group">
+                    <div class="label-row">
+                        <label>Temp Variation</label>
+                        <span class="weight-val" id="val-temp-var">0.0</span>
+                    </div>
+                    <input type="range" id="weight-temp-var" min="0" max="1" step="0.05" value="0.0">
+                </div>
+
+                <div class="control-group">
+                    <div class="label-row">
+                        <label>Gravity Anomaly</label>
+                        <span class="weight-val" id="val-gravity">0.0</span>
+                    </div>
+                    <input type="range" id="weight-gravity" min="0" max="1" step="0.05" value="0.0">
+                </div>
+
+                <div class="control-group">
+                    <div class="label-row">
+                        <label>TI Variance</label>
+                        <span class="weight-val" id="val-ti-var">0.0</span>
+                    </div>
+                    <input type="range" id="weight-ti-var" min="0" max="1" step="0.05" value="0.0">
+                </div>
+
+                <div class="control-group"
+                    style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--glass-border);">
+                    <div class="label-row">
+                        <label>Heatmap Opacity</label>
+                        <span class="weight-val" id="val-opacity">0.65</span>
+                    </div>
+                    <input type="range" id="slider-opacity" min="0" max="1" step="0.01" value="0.65">
+                </div>
+
+                <button id="recalculate-btn" style="margin-top: 5px;">Recalculate Heatmap</button>
             </div>
 
-            <div class="control-group">
-                <div class="label-row">
-                    <label>Surface Temp</label>
-                    <span class="weight-val" id="val-temp">0.0</span>
-                </div>
-                <input type="range" id="weight-temp" min="0" max="1" step="0.05" value="0.0">
-            </div>
-
-            <div class="control-group">
-                <div class="label-row">
-                    <label>Temp Variation</label>
-                    <span class="weight-val" id="val-temp-var">0.0</span>
-                </div>
-                <input type="range" id="weight-temp-var" min="0" max="1" step="0.05" value="0.0">
-            </div>
-
-            <div class="control-group">
-                <div class="label-row">
-                    <label>Gravity Anomaly</label>
-                    <span class="weight-val" id="val-gravity">0.0</span>
-                </div>
-                <input type="range" id="weight-gravity" min="0" max="1" step="0.05" value="0.0">
-            </div>
-
-            <div class="control-group">
-                <div class="label-row">
-                    <label>TI Variance</label>
-                    <span class="weight-val" id="val-ti-var">0.0</span>
-                </div>
-                <input type="range" id="weight-ti-var" min="0" max="1" step="0.05" value="0.0">
-            </div>
-
-            <div class="legend">
-                <div class="legend-row"><strong>Landing Suitability</strong></div>
-                <div class="grad"></div>
-                <div class="legend-text">
-                    <span>Low (Poor)</span>
-                    <span>High (Optimal)</span>
+            <div class="sidebar-footer">
+                <div class="legend">
+                    <div class="legend-row"
+                        style="font-size: 10px; opacity: 0.8; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">
+                        Landing Suitability</div>
+                    <div class="grad"></div>
+                    <div class="legend-text">
+                        <span>Low (Poor)</span>
+                        <span>High (Optimal)</span>
+                    </div>
                 </div>
             </div>
         </aside>
@@ -261,8 +424,33 @@
             maxBounds: bounds,
             maxBoundsViscosity: 1.0,
             attributionControl: false,
-            zoomSnap: 0.1
+            zoomSnap: 0.1,
+            zoomControl: false // Disable default zoom control to reposition
         });
+
+        // Add zoom control at topright
+        L.control.zoom({ position: 'topright' }).addTo(map);
+
+        // Sidebar logic
+        const sidebar = document.getElementById('sidebar');
+        const toggleBtn = document.getElementById('toggle-sidebar');
+        const closeBtn = document.getElementById('close-sidebar');
+        const recalculateBtn = document.getElementById('recalculate-btn');
+        const opacitySlider = document.getElementById('slider-opacity');
+        const opacityVal = document.getElementById('val-opacity');
+
+        toggleBtn.addEventListener('click', () => {
+            sidebar.classList.remove('collapsed');
+            toggleBtn.classList.add('hidden');
+        });
+
+        closeBtn.addEventListener('click', () => {
+            sidebar.classList.add('collapsed');
+            toggleBtn.classList.remove('hidden');
+        });
+
+        // Initialize collapsed
+        sidebar.classList.add('collapsed');
 
         // Function to fit map
         function fitMapToScreen() {
@@ -291,7 +479,7 @@
         // Heatmap Layer
         let currentHeatmap = null;
 
-        function updateHeatmap() {
+        function updateHeatmap(force = false) {
             const weights = {
                 water: document.getElementById('weight-water').value,
                 dust: document.getElementById('weight-dust').value,
@@ -309,35 +497,58 @@
             document.getElementById('val-gravity').innerText = weights.gravity;
             document.getElementById('val-ti-var').innerText = weights.ti_var;
 
-            const url = `http://127.0.0.1:8000/api/v1/heatmap/{z}/{x}/{y}.png?water=${weights.water}&dust=${weights.dust}&temp=${weights.temp}&temp_var=${weights.temp_var}&gravity=${weights.gravity}&ti_var=${weights.ti_var}`;
+            if (force) {
+                const url = `http://127.0.0.1:8000/api/v1/heatmap/{z}/{x}/{y}.png?water=${weights.water}&dust=${weights.dust}&temp=${weights.temp}&temp_var=${weights.temp_var}&gravity=${weights.gravity}&ti_var=${weights.ti_var}&t=${Date.now()}`;
 
-            if (currentHeatmap) {
-                map.removeLayer(currentHeatmap);
+                recalculateBtn.classList.add('loading');
+                recalculateBtn.innerText = 'Calculating...';
+
+                if (currentHeatmap) {
+                    map.removeLayer(currentHeatmap);
+                }
+
+                currentHeatmap = L.tileLayer(url, {
+                    maxZoom: 12,
+                    maxNativeZoom: 6,
+                    minZoom: 0,
+                    noWrap: true,
+                    bounds: bounds,
+                    tileSize: 256,
+                    opacity: parseFloat(opacitySlider.value),
+                    zIndex: 10
+                }).addTo(map);
+
+                // Simulate loading/refreshing state
+                setTimeout(() => {
+                    recalculateBtn.classList.remove('loading');
+                    recalculateBtn.innerText = 'Recalculate Heatmap';
+                }, 800);
             }
-
-            currentHeatmap = L.tileLayer(url, {
-                maxZoom: 12,
-                maxNativeZoom: 6,
-                minZoom: 0,
-                noWrap: true,
-                bounds: bounds,
-                tileSize: 256,
-                opacity: 0.8,
-                zIndex: 10
-            }).addTo(map);
         }
 
-        // Event listeners for sliders
-        const sliders = ['water', 'dust', 'temp', 'temp-var', 'gravity', 'ti-var'];
-        sliders.forEach(id => {
-            document.getElementById(`weight-${id}`).addEventListener('input', updateHeatmap);
+        // Opacity control logic
+        opacitySlider.addEventListener('input', () => {
+            const val = opacitySlider.value;
+            opacityVal.innerText = val;
+            if (currentHeatmap) {
+                currentHeatmap.setOpacity(parseFloat(val));
+            }
         });
 
+        // Event listeners for sliders - just update values, don't trigger tile refresh immediately for performance
+        const sliders = ['water', 'dust', 'temp', 'temp-var', 'gravity', 'ti-var'];
+        sliders.forEach(id => {
+            document.getElementById(`weight-${id}`).addEventListener('input', () => updateHeatmap(false));
+            // Trigger update on change (mouse up) to show immediate preview if desired, 
+            // but user explicitly asked for a button. 
+        });
+
+        recalculateBtn.addEventListener('click', () => updateHeatmap(true));
+
         // Initialize first heatmap
-        updateHeatmap();
+        updateHeatmap(true);
 
         L.control.scale().addTo(map);
-
     </script>
 </body>
 

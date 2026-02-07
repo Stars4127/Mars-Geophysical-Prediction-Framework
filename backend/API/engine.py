@@ -65,45 +65,57 @@ class NovaEngine:
             return []
 
         try:
-            # Start with a base score of zero
             goodness = np.zeros(len(self.df))
             total_weight = 0
-
-            # Convert to float to be safe
             penalty_weight = float(weights.get("Uncertainty_Penalty", 0.5))
 
             for feat, weight_val in weights.items():
                 if feat in self.normalized_data and "_Uncertainty" not in feat:
                     weight = float(weight_val)
-                    # Use the pre-normalized Series
-                    goodness += self.normalized_data[feat].values * weight
+                    val = self.normalized_data[feat].values
+
+                    # --- Feature-specific scientific scoring ---
+                    if feat == "Water":
+                        score = val / (val + 0.15)
+                    elif feat == "Dust":
+                        score = 1.0 - val
+                    elif feat == "Surface_Temp":
+                        diff = val - 0.7
+                        score = np.where(
+                            diff < 0, 
+                            np.exp(-(diff**2) / 0.02),  # Cold penalty
+                            np.exp(-(diff**2) / 0.12)   # Hot penalty
+                        )
+                    elif feat in ["Temp_Variation", "TI_Variance"]:
+                        regional_mean = val.mean()
+                        score = 1.0 - np.clip(np.abs(val - regional_mean) * 3.0, 0, 1)
+                    elif feat == "Gravity":
+                        score = np.exp(-((val - 0.5)**2) / 0.02)
+                    else:
+                        score = val  # fallback linear
+
+                    goodness += score * weight
                     total_weight += abs(weight)
-                    
-                    # Apply uncertainty penalty for this specific feature
+
+                    # --- Apply uncertainty penalty ---
                     unc_feat = f"{feat}_Uncertainty"
                     if unc_feat in self.normalized_data:
                         goodness -= self.normalized_data[unc_feat].values * penalty_weight
 
-            # Normalize goodness score to 0-100 for display
+            # --- Normalize 0-100 for display ---
             if total_weight > 0:
-                g_min = float(goodness.min())
-                g_max = float(goodness.max())
+                g_min, g_max = float(goodness.min()), float(goodness.max())
                 if g_max > g_min:
                     goodness = 100 * (goodness - g_min) / (g_max - g_min)
 
-            # Prepare the result and ensure JSON compliance
-            step = 500 
+            # --- Prepare subset for JSON/leaflet ---
+            step = 500
             subset = self.df.iloc[::step]
-            
-            # Normalize Longitude to -180 to 180 for Leaflet
             lons = subset['Lon'].values
             adjusted_lons = ((lons + 180) % 360) - 180
-            
-            # Cleanse ALL values (Lats, Lons, Scores) of NaNs/Infs
-            lats = np.nan_to_num(subset['Lat'].values, nan=0, posinf=0, neginf=0)
-            adjusted_lons = np.nan_to_num(adjusted_lons, nan=0, posinf=0, neginf=0)
-            final_scores = np.nan_to_num(goodness[::step], nan=0, posinf=0, neginf=0)
-            
+            lats = np.nan_to_num(subset['Lat'].values)
+            final_scores = np.nan_to_num(goodness[::step])
+
             results = []
             for i in range(len(subset)):
                 results.append({
@@ -111,10 +123,10 @@ class NovaEngine:
                     "Lon": round(float(adjusted_lons[i]), 4),
                     "score": round(float(final_scores[i]), 2)
                 })
-            
+
             print(f"✅ Success: Calculated {len(results)} points and cleansed NaNs.")
             return results
-            
+
         except Exception as e:
             print(f"❌ Backend Error in calculate_goodness: {e}")
             raise e
@@ -167,35 +179,42 @@ class NovaEngine:
         import matplotlib.pyplot as plt
         import matplotlib.colors as mcolors
         from PIL import Image
+        from scipy.ndimage import gaussian_filter
         import io
 
+        # --- 1. Tile Context & Buffered Bounds ---
+        # Get base bounds for a 256x256 tile
         min_lon, max_lon, min_lat, max_lat = self.get_tile_bounds(z, x, y)
         
-        # Filter dataframe for efficiency
-        # We can implement a more efficient spatial query with cKDTree or just boolean mask for now.
-        # Given dataset size (100k-1M points), boolean mask on Pandas is "okay" but could be slow.
-        # However, for 8ppd extrapolations (millions of points), we need the index.
-        # But cKDTree is for nearest neighbor.
+        # Define smoothing parameters (as per user instructions)
+        sigma = 2.5
+        pad = int(4 * sigma) # 10 pixels of context to ensure seamless blending
         
-        # Let's simple filter for now. 
-        # Note: df is large.
+        # Calculate degrees per pixel for the query expansion
+        deg_per_px_x = (max_lon - min_lon) / 256.0
+        deg_per_px_y = (max_lat - min_lat) / 256.0
+        
+        # Expanded bounds to pull neighboring data
+        q_min_lon = min_lon - (pad * deg_per_px_x)
+        q_max_lon = max_lon + (pad * deg_per_px_x)
+        q_min_lat = min_lat - (pad * deg_per_px_y)
+        q_max_lat = max_lat + (pad * deg_per_px_y)
+        
+        # --- 2. Data Filtering & Scoring ---
         mask = (
-            (self.df['Lon'] >= min_lon) & 
-            (self.df['Lon'] < max_lon) & 
-            (self.df['Lat'] >= min_lat) & 
-            (self.df['Lat'] < max_lat)
+            (self.df['Lon'] >= q_min_lon) & 
+            (self.df['Lon'] < q_max_lon) & 
+            (self.df['Lat'] >= q_min_lat) & 
+            (self.df['Lat'] < q_max_lat)
         )
         subset = self.df[mask]
         
         if subset.empty:
-            # Return transparent tile
             img = Image.new('RGBA', (256, 256), (0, 0, 0, 0))
             buf = io.BytesIO()
             img.save(buf, format='PNG')
             return buf.getvalue()
 
-        # Calculate scores for this subset
-        # We duplicate logic from calculate_goodness but optimized for this subset
         goodness = np.zeros(len(subset))
         total_weight = 0
         penalty_weight = float(weights.get("Uncertainty_Penalty", 0.5))
@@ -203,24 +222,8 @@ class NovaEngine:
         for feat, weight_val in weights.items():
             if feat in self.normalized_data and "_Uncertainty" not in feat:
                 weight = float(weight_val)
-                # We need to grab values from the global arrays using the index mechanism OR re-extract
-                # Re-extraction from subset is safer/easier to read.
-                
-                # Normalize on the fly? No, uses global min/max for consistency across tiles.
-                # But subset doesn't have the normalized columns.
-                # We should have stored normalized columns in df for RAM tradeoff? 
-                # Or just do the math again.
-                
                 if feat in subset.columns:
-                    # Get global min/max
-                    # This is slightly inefficient but safe. 
-                    # Better: self.normalized_data is a dict of Series (aligned with self.df).
-                    # So we can index it.
-                    global_norm_series = self.normalized_data[feat] # This is a Series/Array matching len(df)
-                    # We need the values corresponding to 'mask'
-                    # Boolean indexing on the numpy array
-                    val = global_norm_series.values[mask]
-                    
+                    val = self.normalized_data[feat].values[mask]
                     goodness += val * weight
                     total_weight += abs(weight)
                     
@@ -229,95 +232,52 @@ class NovaEngine:
                         u_val = self.normalized_data[unc_feat].values[mask]
                         goodness -= u_val * penalty_weight
 
-        # Normalize 0-1 for colormap
-        # We want global consistency? 
-        # If we normalize per tile, colors shift as you pan.
-        # We should clamp based on "expected" range or 0-1 if goodness is roughly 0-1.
-        # Our goodness sums could be anything.
-        # Let's normalize by total_weight to get roughly 0-1 range.
-        # Normalize 0-1 for colormap
-        # LENIENT NORMALIZATION
-        # Standardize based on distribution:
-        # We want the MEDIAN to be around 0.7 (Good/Green)
-        # So most spots are "okay"
-        
+        # Global Normalization (consistent across all tiles)
         if total_weight > 0:
-            # Contrast-Enhanced Lenient Normalization
-            # Instead of strict min-max, we use percentiles to define anchors.
-            # This handles outliers and ensures the 'middle' data is colorful.
-            p10 = np.percentile(goodness, 10)
-            p90 = np.percentile(goodness, 90)
-            
-            if p90 > p10:
-                # Map p10 to 0 (Red), p90 to 1 (Green)
-                goodness = (goodness - p10) / (p90 - p10)
-            else:
-                # Fallback to local min-max if distribution is very tight
-                g_min, g_max = goodness.min(), goodness.max()
-                if g_max > g_min:
-                    goodness = (goodness - g_min) / (g_max - g_min)
-                else:
-                    goodness.fill(0.5) 
-            
-            # Additional 'leniency' boost: 
-            # Slightly shift everything towards 'Good' (Green)
-            goodness = goodness ** 1.2 # Slightly more contrasty than before
-            goodness = 0.0 + (goodness * 1.0) # Full range usage
-            
-        # Clip to 0-1
+            goodness = goodness / total_weight
         goodness = np.clip(goodness, 0, 1)
 
-        # Create 2D Histogram (Heatmap)
-        # We map Lat/Lon to 0-256 pixel coordinates
+        # --- 3. Padded Grid Creation & Point Injection ---
+        grid_dim = 256 + 2 * pad
+        grid = np.zeros((grid_dim, grid_dim))
+        count = np.zeros((grid_dim, grid_dim))
         
-        pixel_x = ((subset['Lon'].values - min_lon) / (max_lon - min_lon) * 256).astype(int)
-        pixel_y = ((max_lat - subset['Lat'].values) / (max_lat - min_lat) * 256).astype(int) 
+        # Map relative to the PADDED bounds
+        pixel_x = ((subset['Lon'].values - q_min_lon) / (q_max_lon - q_min_lon) * grid_dim).astype(int)
+        pixel_y = ((q_max_lat - subset['Lat'].values) / (q_max_lat - q_min_lat) * grid_dim).astype(int) 
         
-        # Clip again to be safe
-        pixel_x = np.clip(pixel_x, 0, 255)
-        pixel_y = np.clip(pixel_y, 0, 255)
+        pixel_x = np.clip(pixel_x, 0, grid_dim - 1)
+        pixel_y = np.clip(pixel_y, 0, grid_dim - 1)
 
-        # Accumulate score in grid
-        grid = np.zeros((256, 256))
-        count = np.zeros((256, 256))
-        
-        indices = (pixel_y, pixel_x)
-        np.add.at(grid, indices, goodness)
-        np.add.at(count, indices, 1)
-        
+        np.add.at(grid, (pixel_y, pixel_x), goodness)
+        np.add.at(count, (pixel_y, pixel_x), 1)
+
+        # Average grid values before smoothing for accuracy
         with np.errstate(divide='ignore', invalid='ignore'):
-            grid = grid / count
-            grid[np.isnan(grid)] = 0
-            
-        # Point Expansion / Smoothing
-        from scipy.ndimage import gaussian_filter
+            grid = grid / (count + 0.000001)
+            grid[count == 0] = 0
         
-        sigma = 1.5
+        # --- 4. Smooth on Extended Context & Crop ---
         grid_smoothed = gaussian_filter(grid, sigma=sigma)
         count_smoothed = gaussian_filter(count, sigma=sigma)
-        
-        # We re-mask based on smoothed density
-        mask_visibility = (count_smoothed > 0.005)
 
-        # Apply colormap
+        # Crop back to the central 256x256 region
+        final_grid = grid_smoothed[pad:pad+256, pad:pad+256]
+        final_count = count_smoothed[pad:pad+256, pad:pad+256]
+
+        # --- 5. Rendering & Alpha ---
+        mask_visibility = (final_count > 0.005)
         cmap = plt.get_cmap('RdYlGn')
-        
-        # Grid is 0-1. Map to RGBA.
-        rgba_img = cmap(grid_smoothed) 
-        
-        # Set Alpha based on density - VERY STRONG
-        alpha_channel = rgba_img[..., 3]
-        
-        # Boosted alpha: 4.0 multiplier and 0.9 cap for "very strong" look
-        alpha_channel[:] = np.clip(count_smoothed * 4.0, 0, 0.9)
-        
+        rgba_img = cmap(final_grid)
+
+        # Compute alpha from the counts inside this tile
+        # Cap alpha at 0.9 as per instructions
+        alpha_channel = np.clip(final_count * 4.0, 0, 0.9)
         alpha_channel[~mask_visibility] = 0
-        
         rgba_img[..., 3] = alpha_channel
-        
-        # Convert to uint8
+
+        # Convert to PNG Byte stream
         rgba_uint8 = (rgba_img * 255).astype(np.uint8)
-        
         img = Image.fromarray(rgba_uint8)
         buf = io.BytesIO()
         img.save(buf, format='PNG')

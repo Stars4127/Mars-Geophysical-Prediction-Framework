@@ -32,10 +32,12 @@ class GenericANN(nn.Module):
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 ENSEMBLE_SIZE = 5
 CORE_2PPD_PATH = "backend/models/datasets/core_set_2ppd.csv"
-FEATURES_8PPD_PATH = "backend/models/datasets/8ppd_core_features_for_mapping.csv"
+FEATURES_8PPD_PATH = "backend/models/datasets/8ppd_features_full.csv"
 OUTPUT_PATH = "backend/models/datasets/8ppd_extrapolated_targets.csv"
 
 # Models Metadata
+# Note: Feature names here must match exactly what was in the 2ppd training set.
+# Mapping from 8ppd_features_full.csv will handle translation.
 MODELS_INFO = [
     {
         "name": "Water",
@@ -211,10 +213,22 @@ def main():
     
     first_chunk = True
     
-    # Column mapping to fix potentially broken headers in 8ppd
+    # Column mapping to translate 8ppd_features_full.csv to Training Header Names
     column_rename_map = {
-        "OMEGA Est. Lambert Albedo 1080nm": "OMEGA Est. Lambert Albedo 1080nm Ody et al 2012"
-        # The split part " Ody et al 2012" will be ignored
+        "Lon": "Longitude (E)",
+        "Lat": "Latitude (N)",
+        "mola_128ppd_aspect": "MOLA 128ppd Aspect",
+        "mola_128ppd_slope": "MOLA 128ppd Slope",
+        "MOLA_128ppd_topo": "MOLA 128ppd Elevation",
+        "mola_roughness_0.6km_numeric": "MOLA Roughness 0.6km Baseline - Numeric",
+        "mola_roughness_2.4km_numeric": "MOLA Roughness 2.4km Baseline - Numeric",
+        "omega_albedo_r1080": "OMEGA Est. Lambert Albedo 1080nm Ody et al 2012",
+        "tes_dayside_ti_putzig_2007": "Dayside Thermal Inertia (20 ppd) (Putzig and Mellon 2007)",
+        "tes_nightside_ti_putzig_2007": "Nightside Thermal Inertia (20 ppd) (Putzig and Mellon 2007)",
+        "grav_ggmro_120_crust": "Mars Crustal Thickness (GSFC)",
+        "TES_Andesite_numeric": "TES Andesite Abundance - Numeric",
+        "TES_Basalt_numeric": "TES Basalt Abundance - Numeric",
+        "tes_rock_abundance_numeric": "TES Rock Abundance (Nowicki and Christensen 2007) - Numeric"
     }
 
     for chunk in tqdm(reader, desc="Processing chunks"):

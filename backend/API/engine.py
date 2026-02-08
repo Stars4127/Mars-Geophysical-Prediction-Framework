@@ -1,22 +1,22 @@
 import pandas as pd
 import numpy as np
 import os
+import threading
 from scipy.spatial import cKDTree
+import pyarrow.parquet as pq
 
-DATA_PATH = "backend/models/datasets/8ppd_extrapolated_targets.csv"
+DATA_PATH = "backend/models/datasets/8ppd_extrapolated_targets.parquet"
 
 class NovaEngine:
     def __init__(self):
         self.df = None
         self.tree = None
         self.normalized_data = {}
+        self.render_lock = threading.Lock()
         self.last_global_stats = {
             "weights": None,
-            "min": 0.0,
-            "max": 1.0,
-            "p5": 0.0,
-            "p95": 1.0,
-            "total_weight": 1.0
+            "p10": 0.0,
+            "p90": 1.0
         }
         self.load_data()
 
@@ -25,34 +25,39 @@ class NovaEngine:
             print(f"❌ Data file not found at {DATA_PATH}")
             return
 
-        print(f"📖 Loading 8ppd data into memory...")
-        self.df = pd.read_csv(DATA_PATH)
-        
-        # Normalize Longitude to -180 to 180 standard
-        # 0-360 -> -180-180
-        if 'Lon' in self.df.columns:
-             # ((lon + 180) % 360) - 180
-             self.df['Lon'] = ((self.df['Lon'] + 180) % 360) - 180
-        
-        # Pre-calculate min/max for normalization of key features
+        print(f"📖 Lazy-loading 8ppd index from Parquet...")
+        # Only load Lat/Lon to save RAM (~400MB for 50M points)
+        self.df = pd.read_parquet(DATA_PATH, columns=['Lat', 'Lon'])
+        self.df['Lat'] = self.df['Lat'].astype('float32')
+        self.df['Lon'] = self.df['Lon'].astype('float32')
+
+        # Normalize Longitude once
+        self.df['Lon'] = ((self.df['Lon'] + 180) % 360) - 180
+
+        print("📊 Extracting normalization stats from Parquet Metadata...")
         features = ['Water', 'Dust', 'Surface_Temp', 'Temp_Variation', 'Gravity', 'TI_Variance']
-        for feat in features:
-            if feat in self.df.columns:
-                f_min = self.df[feat].min()
-                f_max = self.df[feat].max()
-                # Store normalized version for fast math
-                # formula: (x - min) / (max - min)
-                self.normalized_data[feat] = (self.df[feat] - f_min) / (f_max - f_min)
-                
-                # Also normalize uncertainties
-                unc_feat = f"{feat}_Uncertainty"
-                if unc_feat in self.df.columns:
-                    u_min = self.df[unc_feat].min()
-                    u_max = self.df[unc_feat].max()
-                    self.normalized_data[unc_feat] = (self.df[unc_feat] - u_min) / (u_max - u_min)
+        all_cols = features + [f + "_Uncertainty" for f in features]
+        
+        # Use Parquet metadata for nearly instant min/max extraction
+        pf = pq.ParquetFile(DATA_PATH)
+        metadata = pf.metadata
+        for col_name in all_cols:
+            col_idx = -1
+            # Find column index by name in metadata
+            for i in range(pf.num_row_groups):
+                rg = pf.metadata.row_group(i)
+                for j in range(rg.num_columns):
+                    if rg.column(j).path_in_schema == col_name:
+                        stats = rg.column(j).statistics
+                        if stats:
+                            current = self.normalized_data.get(col_name, {'min': float('inf'), 'max': float('-inf')})
+                            self.normalized_data[col_name] = {
+                                'min': min(current['min'], stats.min),
+                                'max': max(current['max'], stats.max)
+                            }
+                        break
 
         print("🌲 Building Spatial Index (cKDTree)...")
-        # Build tree for nearest neighboring lookups (double click)
         self.tree = cKDTree(self.df[['Lat', 'Lon']].values)
         print("✅ engine ready.")
 
@@ -73,69 +78,88 @@ class NovaEngine:
             return []
 
         try:
-            goodness = np.zeros(len(self.df))
+            n_rows = len(self.df)
+            goodness = np.zeros(n_rows, dtype=np.float32)
             total_weight = 0
             penalty_weight = float(weights.get("Uncertainty_Penalty", 0.5))
 
-            for feat, weight_val in weights.items():
-                if feat in self.normalized_data and "_Uncertainty" not in feat:
-                    weight = float(weight_val)
-                    val = self.normalized_data[feat].values
+            # Stream features in batches to compute global score
+            features_to_load = [f for f, w in weights.items() if f in self.normalized_data and float(w) != 0]
+            if not features_to_load:
+                return []
+                
+            cols = []
+            for f in features_to_load:
+                cols.append(f)
+                if f"{f}_Uncertainty" in self.normalized_data:
+                    cols.append(f"{f}_Uncertainty")
 
-                    # --- Feature-specific scientific scoring ---
+            # Load only needed features in one pass (or chunks if needed, but 1M rows * 10 cols fits)
+            # For 50M rows, we chunk it.
+            parquet_file = pq.ParquetFile(DATA_PATH)
+            
+            row_idx = 0
+            for batch in parquet_file.iter_batches(batch_size=2_000_000, columns=cols):
+                chunk = batch.to_pandas().astype('float32')
+                batch_len = len(chunk)
+                
+                for feat in features_to_load:
+                    weight = float(weights[feat])
+                    if feat not in chunk.columns: continue
+                    
+                    # Normalize on the fly
+                    stats = self.normalized_data[feat]
+                    val = (chunk[feat].values - stats['min']) / (stats['max'] - stats['min'] + 1e-6)
+                    
+                    # ===== SCIENTIFIC SCALING =====
                     if feat == "Water":
-                        score = val / (val + 0.15)
+                        score = np.tanh(val * 1.8)
                     elif feat == "Dust":
-                        score = 1.0 - val
+                        score = 1.0 - np.power(val, 1.5)
                     elif feat == "Surface_Temp":
-                        diff = val - 0.7
-                        score = np.where(
-                            diff < 0, 
-                            np.exp(-(diff**2) / 0.02),  # Cold penalty
-                            np.exp(-(diff**2) / 0.12)   # Hot penalty
-                        )
+                        diff = val - 0.65
+                        score = np.where(diff < 0, np.exp(-(diff**2) / 0.06), np.exp(-(diff**2) / 0.18))
                     elif feat in ["Temp_Variation", "TI_Variance"]:
-                        regional_mean = val.mean()
-                        score = 1.0 - np.clip(np.abs(val - regional_mean) * 3.0, 0, 1)
+                        score = 1.0 - np.clip(val * 1.8, 0, 1)
                     elif feat == "Gravity":
-                        score = np.exp(-((val - 0.5)**2) / 0.02)
+                        score = np.exp(-((val - 0.5)**2) / 0.05)
                     else:
-                        score = val  # fallback linear
+                        score = val
 
-                    goodness += score * weight
-                    total_weight += abs(weight)
-
-                    # --- Apply uncertainty penalty ---
+                    # ===== UNCERTAINTY SCALER =====
                     unc_feat = f"{feat}_Uncertainty"
-                    if unc_feat in self.normalized_data:
-                        goodness -= self.normalized_data[unc_feat].values * penalty_weight
+                    if unc_feat in chunk.columns:
+                        u_stats = self.normalized_data[unc_feat]
+                        u_val = (chunk[unc_feat].values - u_stats['min']) / (u_stats['max'] - u_stats['min'] + 1e-6)
+                        confidence = np.exp(-u_val * penalty_weight)
+                        score = score * confidence
 
-            # Cache the global stats for this weight set to ensure consistent tile rendering
+                    goodness[row_idx:row_idx+batch_len] += score * weight
+                
+                row_idx += batch_len
+                if total_weight == 0: # Initialize total_weight on first relevant feat
+                     for f in features_to_load: total_weight += abs(float(weights[f]))
+
+            # ===== GLOBAL NORMALIZATION =====
             if total_weight > 0:
-                g_min, g_max = float(goodness.min()), float(goodness.max())
-                p5, p95 = np.percentile(goodness, [5, 95])
+                p10, p90 = np.percentile(goodness, [10, 90])
                 self.last_global_stats = {
                     "weights": weights.copy(),
-                    "min": g_min,
-                    "max": g_max,
-                    "p5": p5,
-                    "p95": p95,
-                    "total_weight": total_weight
+                    "p10": p10,
+                    "p90": p90
                 }
-            
-            # --- Normalize 0-100 for display ---
-            if total_weight > 0:
-                # Use the p5/p95 stats for the display normalization too for consistency
-                stats = self.last_global_stats
-                goodness = 100 * (goodness - stats['p5']) / (stats['p95'] - stats['p5'] + 1e-6)
+                goodness = 100 * (goodness - p10) / (p90 - p10 + 1e-6)
                 goodness = np.clip(goodness, 0, 100)
 
-            # --- Prepare subset for JSON/leaflet ---
+            # ===== PREPARE LEAFLET OUTPUT =====
             step = 500
             subset = self.df.iloc[::step]
+
             lons = subset['Lon'].values
             adjusted_lons = ((lons + 180) % 360) - 180
+
             lats = np.nan_to_num(subset['Lat'].values)
+            adjusted_lons = np.nan_to_num(adjusted_lons)
             final_scores = np.nan_to_num(goodness[::step])
 
             results = []
@@ -146,7 +170,7 @@ class NovaEngine:
                     "score": round(float(final_scores[i]), 2)
                 })
 
-            print(f"✅ Success: Calculated {len(results)} points and cleansed NaNs.")
+            print(f"✅ Success: Calculated {len(results)} points.")
             return results
 
         except Exception as e:
@@ -196,22 +220,26 @@ class NovaEngine:
         return min_lon, max_lon, min_lat, max_lat
 
     def render_tile(self, z, x, y, weights):
-        import matplotlib
-        matplotlib.use('Agg') # Non-interactive backend
-        import matplotlib.pyplot as plt
-        import matplotlib.colors as mcolors
-        from PIL import Image
-        from scipy.ndimage import gaussian_filter
-        import io
+        with self.render_lock: # Limit concurrency to avoid memory spikes
+            import matplotlib
+            matplotlib.use('Agg') # Non-interactive backend
+            import matplotlib.pyplot as plt
+            from PIL import Image
+            from scipy.ndimage import gaussian_filter
+            import io
 
-        # --- 0. Global Stats Synchronization Guard ---
-        # If the weights have changed since the last global calculation, or if stats are missing,
-        # we MUST recompute them before rendering ANY tile to ensure absolute color consistency.
-        if self.last_global_stats['weights'] != weights:
-            print("⚠️ Tile Engine: Global stats outdated for requested weights. Synchronizing...")
-            self.calculate_goodness(weights)
+            # --- 0. Global Stats Synchronization Guard ---
+            if self.last_global_stats['weights'] != weights:
+                print("⚠️ Tile Engine: Global stats outdated for requested weights. Synchronizing...")
+                self.calculate_goodness(weights)
             
-        stats = self.last_global_stats
+            global_stats = self.last_global_stats
+            
+            # Safety: Ensure we have valid stats
+            if 'p10' not in global_stats or 'p90' not in global_stats:
+                print("⚠️ Tile Engine: Missing global stats. Computing now...")
+                self.calculate_goodness(weights)
+                global_stats = self.last_global_stats
 
         # --- 1. Tile Context & Buffered Bounds ---
         min_lon, max_lon, min_lat, max_lat = self.get_tile_bounds(z, x, y)
@@ -230,14 +258,35 @@ class NovaEngine:
         q_min_lat = min_lat - (pad * deg_per_px_y)
         q_max_lat = max_lat + (pad * deg_per_px_y)
         
-        # --- 2. Data Filtering & Scoring ---
-        mask = (
-            (self.df['Lon'] >= q_min_lon) & 
-            (self.df['Lon'] < q_max_lon) & 
-            (self.df['Lat'] >= q_min_lat) & 
-            (self.df['Lat'] < q_max_lat)
-        )
-        subset = self.df[mask]
+        # --- 2. Data Filtering & Scoring (LAZY PARQUET LOADING) ---
+        # The Parquet file has RAW coordinates (0-5127.5 lat, 0-9711.5 lon)
+        # We need to convert our query bounds back to raw space for filtering
+        SCALE = 27.0
+        raw_min_lat = (q_min_lat + 90) * SCALE
+        raw_max_lat = (q_max_lat + 90) * SCALE
+        raw_min_lon = (q_min_lon + 180) * SCALE
+        raw_max_lon = (q_max_lon + 180) * SCALE
+        
+        filters = [
+            ('Lon', '>=', raw_min_lon), ('Lon', '<', raw_max_lon),
+            ('Lat', '>=', raw_min_lat), ('Lat', '<', raw_max_lat)
+        ]
+        
+        # Only load columns needed for this specific weight set
+        needed_cols = ['Lat', 'Lon']
+        for f, w in weights.items():
+            if float(w) != 0 and f in self.normalized_data:
+                needed_cols.append(f)
+                if f"{f}_Uncertainty" in self.normalized_data:
+                    needed_cols.append(f"{f}_Uncertainty")
+        
+        table = pq.read_table(DATA_PATH, columns=needed_cols, filters=filters)
+        subset = table.to_pandas().astype('float32')
+        
+        # Transform coordinates from raw pixel space to lat/lon
+        subset['Lat'] = (subset['Lat'] / SCALE) - 90
+        subset['Lon'] = (subset['Lon'] / SCALE) - 180
+        subset['Lon'] = ((subset['Lon'] + 180) % 360) - 180  # Normalize to -180/180
         
         if subset.empty:
             img = Image.new('RGBA', (256, 256), (0, 0, 0, 0))
@@ -245,27 +294,49 @@ class NovaEngine:
             img.save(buf, format='PNG')
             return buf.getvalue()
 
-        goodness = np.zeros(len(subset))
+        n_subset = len(subset)
+        goodness = np.zeros(n_subset, dtype=np.float32)
         total_weight = 0
         penalty_weight = float(weights.get("Uncertainty_Penalty", 0.5))
 
         for feat, weight_val in weights.items():
-            if feat in self.normalized_data and "_Uncertainty" not in feat:
-                weight = float(weight_val)
-                if feat in subset.columns:
-                    val = self.normalized_data[feat].values[mask]
-                    goodness += val * weight # Using raw weights here, mapping to global scale later
-                    total_weight += abs(weight)
-                    
-                    unc_feat = f"{feat}_Uncertainty"
-                    if unc_feat in self.normalized_data:
-                        u_val = self.normalized_data[unc_feat].values[mask]
-                        goodness -= u_val * penalty_weight
+            weight = float(weight_val)
+            if weight == 0 or feat not in subset.columns: continue
+            
+            # Normalize subset relative to global stats
+            feat_stats = self.normalized_data[feat]
+            val = (subset[feat].values - feat_stats['min']) / (feat_stats['max'] - feat_stats['min'] + 1e-6)
+            
+            # ===== SCIENTIFIC SCALING =====
+            if feat == "Water":
+                score = np.tanh(val * 1.8)
+            elif feat == "Dust":
+                score = 1.0 - np.power(val, 1.5)
+            elif feat == "Surface_Temp":
+                diff = val - 0.65
+                score = np.where(diff < 0, np.exp(-(diff**2) / 0.06), np.exp(-(diff**2) / 0.18))
+            elif feat in ["Temp_Variation", "TI_Variance"]:
+                score = 1.0 - np.clip(val * 1.8, 0, 1)
+            elif feat == "Gravity":
+                score = np.exp(-((val - 0.5)**2) / 0.05)
+            else:
+                score = val
+
+            # ===== UNCERTAINTY SCALER =====
+            unc_feat = f"{feat}_Uncertainty"
+            if unc_feat in subset.columns:
+                u_stats = self.normalized_data[unc_feat]
+                u_val = (subset[unc_feat].values - u_stats['min']) / (u_stats['max'] - u_stats['min'] + 1e-6)
+                confidence = np.exp(-u_val * penalty_weight)
+                score = score * confidence
+
+            goodness += score * weight
+            total_weight += abs(weight)
 
         # Global Absolute Normalization
         # Instead of local tile normalization, we map the goodness scores to the GLOBAL range
         # captured in last_global_stats. This ensures "Green" is the same value everywhere.
-        goodness = (goodness - stats['p5']) / (stats['p95'] - stats['p5'] + 1e-6)
+        goodness = (goodness - global_stats['p10']) / (global_stats['p90'] - global_stats['p10'] + 1e-6)
         goodness = np.clip(goodness, 0, 1)
 
         # --- 3. Grid Creation, Smoothing & Cropping ---

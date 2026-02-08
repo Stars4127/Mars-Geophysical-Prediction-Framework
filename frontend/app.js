@@ -85,8 +85,11 @@ function updateHeatmap(force = false) {
     document.getElementById('val-ti-var').innerText = weights.ti_var;
 
     if (force) {
+        const loadingOverlay = document.getElementById('loading-overlay');
         const url = `http://127.0.0.1:8000/api/v1/heatmap/{z}/{x}/{y}.png?water=${weights.water}&dust=${weights.dust}&temp=${weights.temp}&temp_var=${weights.temp_var}&gravity=${weights.gravity}&ti_var=${weights.ti_var}&t=${Date.now()}`;
 
+        // Show loading overlay
+        loadingOverlay.classList.remove('hidden');
         recalculateBtn.classList.add('loading');
         recalculateBtn.innerText = 'Calculating...';
 
@@ -105,11 +108,38 @@ function updateHeatmap(force = false) {
             zIndex: 10
         }).addTo(map);
 
-        // Simulate loading/refreshing state
+        // Hide loading overlay when tiles start loading
+        let tilesLoaded = 0;
+        let tilesLoading = 0;
+        
+        currentHeatmap.on('tileloadstart', () => {
+            tilesLoading++;
+        });
+        
+        currentHeatmap.on('tileload', () => {
+            tilesLoaded++;
+            if (tilesLoaded >= Math.min(tilesLoading, 3)) {
+                loadingOverlay.classList.add('hidden');
+                recalculateBtn.classList.remove('loading');
+                recalculateBtn.innerText = 'Recalculate Heatmap';
+            }
+        });
+        
+        currentHeatmap.on('tileerror', () => {
+            tilesLoaded++;
+            if (tilesLoaded >= Math.min(tilesLoading, 3)) {
+                loadingOverlay.classList.add('hidden');
+                recalculateBtn.classList.remove('loading');
+                recalculateBtn.innerText = 'Recalculate Heatmap';
+            }
+        });
+        
+        // Fallback timeout
         setTimeout(() => {
+            loadingOverlay.classList.add('hidden');
             recalculateBtn.classList.remove('loading');
             recalculateBtn.innerText = 'Recalculate Heatmap';
-        }, 800);
+        }, 5000);
     }
 }
 

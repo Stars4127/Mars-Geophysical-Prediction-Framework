@@ -336,3 +336,11 @@ if __name__ == "__main__":
     # predictor.tune(n_trials=25, max_epochs=10)
     # predictor.train_best(max_epochs=300)
     predictor.load_and_eval()
+
+# Metrics
+# 📉 Dropped 5995 rows containing NaNs. Remaining: 261400
+# Spatial Split -> Train: 183319, Val: 51896, Test: 26185
+# ✅ Preprocessing complete
+# 🔍 Loading Ensemble of 5 models from backend/models/neural_nets/temp_predictor...
+# 📊 Ensemble Test R²: 0.7822 | MAE: 2.3193
+# 💡 Mean Uncertainty (StdDev): 1.6222

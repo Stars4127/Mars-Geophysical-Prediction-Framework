@@ -25,11 +25,7 @@ random.seed(SEED)
 np.random.seed(SEED)
 torch.manual_seed(SEED)
 
-device = (
-    "cuda" if torch.cuda.is_available()
-    else "mps" if torch.backends.mps.is_available()
-    else "cpu"
-)
+device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 os.makedirs(MODEL_DIR, exist_ok=True)
 print(f"🔥 Using device: {device}")
 
@@ -150,7 +146,7 @@ class GravityPredictor:
     # -------------------------
     # Train loop
     # -------------------------
-    def _train(self, model, lr, max_epochs=200, patience=15, trial_idx=None):
+    def _train(self, model, lr, max_epochs=250, patience=15, trial_idx=None):
         model.to(device)
         opt = optim.Adam(model.parameters(), lr=lr)
         loss_fn = nn.MSELoss()
@@ -282,6 +278,10 @@ class GravityPredictor:
         for i in range(ENSEMBLE_SIZE):
             model = GravityANN(len(self.features), **model_params).to(device)
             save_path = f"{MODEL_DIR}/model_{i}.pt"
+            
+            if not os.path.exists(save_path):
+                 raise FileNotFoundError(f"Ensemble member {i} not found at {save_path}. Run train_best() first.")
+                 
             model.load_state_dict(torch.load(save_path, map_location=device, weights_only=True))
             model.eval()
             
@@ -301,26 +301,32 @@ class GravityPredictor:
         
         return mean_pred, uncertainty
 
-def main():
+if __name__ == "__main__":
     predictor = GravityPredictor(
         csv_path="backend/models/datasets/core_set_2ppd.csv",
         target="Mars Bouguer Gravity Anomaly",
         features=[
             'MOLA 128ppd Elevation',
-            'MOLA 128ppd Slope',
-            'MOLA Roughness 2.4km Baseline - Numeric',
-            'Dayside Thermal Inertia (20 ppd) (Putzig and Mellon 2007)',
-            'Nightside Thermal Inertia (20 ppd) (Putzig and Mellon 2007)',
-            'TES Basalt Abundance - Numeric',
-            'TES Rock Abundance (Nowicki and Christensen 2007) - Numeric',
-            'Latitude (N)'
-        ]
-    )
+    'MOLA 128ppd Slope',
+    'MOLA Roughness 2.4km Baseline - Numeric',
+    'Dayside Thermal Inertia (20 ppd) (Putzig and Mellon 2007)',
+    'Nightside Thermal Inertia (20 ppd) (Putzig and Mellon 2007)',
+    'TES Basalt Abundance - Numeric',
+    'TES Rock Abundance (Nowicki and Christensen 2007) - Numeric',
+    'Latitude (N)'
+]
+)
 
     predictor.preprocess()
-    predictor.tune(n_trials=25, max_epochs=10)
-    predictor.train_best(max_epochs=300)
+    # predictor.tune(n_trials=25, max_epochs=10)
+    # predictor.train_best(max_epochs=300)
     predictor.load_and_eval()
 
-if __name__ == "__main__":
-    main()
+# Metrics
+# Original size: 267395
+# 📉 Dropped 117915 rows containing NaNs. Remaining: 149480
+# Spatial Split -> Train: 102880, Val: 30473, Test: 16127
+# ✅ Preprocessing complete
+# 🔍 Loading Ensemble of 5 models from backend/models/neural_nets/gravity_predictor...
+# 📊 Ensemble Test R²: 0.8153 | MAE: 93.0531
+# 💡 Mean Uncertainty (StdDev): 14.3369

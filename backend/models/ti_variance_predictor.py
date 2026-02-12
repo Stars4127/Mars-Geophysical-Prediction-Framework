@@ -320,6 +320,13 @@ if __name__ == "__main__":
         ]
     )
     predictor.preprocess()
-    predictor.tune(n_trials=25, max_epochs=15)
-    predictor.train_best(max_epochs=300)
+    # predictor.tune(n_trials=25, max_epochs=15)
+    # predictor.train_best(max_epochs=300)
     predictor.load_and_eval()
+
+# Metrics
+# 📉 Dropped 119433 rows containing NaNs. Remaining: 147962
+# Spatial Split -> Train: 101574, Val: 30315, Test: 16073
+# ✅ Preprocessing complete. Derived Target 'TI_Variance' created.
+# 📊 Ensemble Test R²: -0.1947 | MAE: 30.9233
+# 💡 Mean Uncertainty (StdDev): 3.1934

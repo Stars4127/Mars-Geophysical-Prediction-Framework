@@ -285,6 +285,8 @@ class DustPredictor:
         for i in range(ENSEMBLE_SIZE):
             model = DustANN(len(self.features), params["layers"], params["units"], params["activation"]).to(device)
             save_path = f"{MODEL_DIR}/model_{i}.pt"
+            if not os.path.exists(save_path):
+                 raise FileNotFoundError(f"Ensemble member {i} not found at {save_path}. Run train_best() first.")
             model.load_state_dict(torch.load(save_path, map_location=device, weights_only=True))
             model.eval()
             
@@ -324,6 +326,14 @@ if __name__ == "__main__":
     ])
     #check this but without albedo
     predictor.preprocess()
-    predictor.tune(n_trials=25, max_epochs=10)
-    predictor.train_best()
+    # predictor.tune(n_trials=25, max_epochs=10)
+    # predictor.train_best()
     predictor.load_and_eval()
+
+# Metrics
+# 📉 Dropped 24402 rows. Final size: 242993
+# Spatial Split -> Train: 167582, Val: 50919, Test: 24492
+# ✅ Preprocessing complete
+# 🔍 Loading Ensemble of 5 models from backend/models/neural_nets/dust_predictor...
+# 📊 Ensemble Test R²: 0.5678 | MAE: 0.0061
+# 💡 Mean Uncertainty (StdDev): 0.0045

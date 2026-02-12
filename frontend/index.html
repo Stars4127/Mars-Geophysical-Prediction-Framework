@@ -5,102 +5,125 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nova Scope - Mars Landing Site Optimizer</title>
+
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
         integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+
     <!-- Google Fonts -->
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@300;600;900&display=swap"
         rel="stylesheet">
 
-    <!-- Custom CSS -->
+    <!-- Custom Style -->
     <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
     <div id="app-container">
-        <button id="toggle-sidebar">🗺️ MISSION PARAMETERS</button>
-        <aside id="sidebar" class="collapsed">
+        <button id="toggle-sidebar">MISSION PARAMETERS</button>
+
+        <aside id="sidebar">
             <div class="sidebar-header">
-                <h1>NOVA SCOPE</h1>
-                <button id="close-sidebar">×</button>
-            </div>
-            <p class="subtitle">Mars Site Optimizer</p>
-
-            <div class="toggle-group">
-                <label>Heatmap Overlay</label>
-                <input type="checkbox" id="toggle-heatmap" checked>
-            </div>
-
-            <!-- Sliders -->
-            <div class="control-group">
-                <div class="label-row">
-                    <label>Water (WEH%)</label>
-                    <span class="weight-val" id="val-water">1.0</span>
+                <div>
+                    <h1>NOVA SCOPE</h1>
+                    <p class="subtitle">Mars Site Optimizer</p>
                 </div>
-                <input type="range" id="weight-water" min="0" max="1" step="0.05" value="1.0">
+                <button id="close-sidebar">&times;</button>
             </div>
 
-            <div class="control-group">
-                <div class="label-row">
-                    <label>Dust Content</label>
-                    <span class="weight-val" id="val-dust">0.0</span>
+            <div class="sidebar-content">
+                <!-- Sliders -->
+                <div class="control-group">
+                    <div class="label-row">
+                        <label>Water (WEH%)</label>
+                        <span class="weight-val" id="val-water">1.0</span>
+                    </div>
+                    <input type="range" id="weight-water" min="0" max="1" step="0.05" value="1.0">
                 </div>
-                <input type="range" id="weight-dust" min="0" max="1" step="0.05" value="0.0">
-            </div>
 
-            <div class="control-group">
-                <div class="label-row">
-                    <label>Surface Temp</label>
-                    <span class="weight-val" id="val-temp">0.0</span>
+                <div class="control-group">
+                    <div class="label-row">
+                        <label>Dust Content</label>
+                        <span class="weight-val" id="val-dust">0.0</span>
+                    </div>
+                    <input type="range" id="weight-dust" min="0" max="1" step="0.05" value="0.0">
                 </div>
-                <input type="range" id="weight-temp" min="0" max="1" step="0.05" value="0.0">
-            </div>
 
-            <div class="control-group">
-                <div class="label-row">
-                    <label>Temp Variation</label>
-                    <span class="weight-val" id="val-temp-var">0.0</span>
+                <div class="control-group">
+                    <div class="label-row">
+                        <label>Surface Temp</label>
+                        <span class="weight-val" id="val-temp">0.0</span>
+                    </div>
+                    <input type="range" id="weight-temp" min="0" max="1" step="0.05" value="0.0">
                 </div>
-                <input type="range" id="weight-temp-var" min="0" max="1" step="0.05" value="0.0">
-            </div>
 
-            <div class="control-group">
-                <div class="label-row">
-                    <label>Gravity Anomaly</label>
-                    <span class="weight-val" id="val-gravity">0.0</span>
+                <div class="control-group">
+                    <div class="label-row">
+                        <label>Temp Variation</label>
+                        <span class="weight-val" id="val-temp-var">0.0</span>
+                    </div>
+                    <input type="range" id="weight-temp-var" min="0" max="1" step="0.05" value="0.0">
                 </div>
-                <input type="range" id="weight-gravity" min="0" max="1" step="0.05" value="0.0">
-            </div>
 
-            <div class="control-group">
-                <div class="label-row">
-                    <label>TI Variance</label>
-                    <span class="weight-val" id="val-ti-var">0.0</span>
+                <div class="control-group">
+                    <div class="label-row">
+                        <label>Gravity Anomaly</label>
+                        <span class="weight-val" id="val-gravity">0.0</span>
+                    </div>
+                    <input type="range" id="weight-gravity" min="0" max="1" step="0.05" value="0.0">
                 </div>
-                <input type="range" id="weight-ti-var" min="0" max="1" step="0.05" value="0.0">
+
+                <div class="control-group">
+                    <div class="label-row">
+                        <label>TI Variance</label>
+                        <span class="weight-val" id="val-ti-var">0.0</span>
+                    </div>
+                    <input type="range" id="weight-ti-var" min="0" max="1" step="0.05" value="0.0">
+                </div>
+
+                <div class="control-group"
+                    style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--glass-border);">
+                    <div class="label-row">
+                        <label>Heatmap Opacity</label>
+                        <span class="weight-val" id="val-opacity">0.65</span>
+                    </div>
+                    <input type="range" id="slider-opacity" min="0" max="1" step="0.01" value="0.65">
+                </div>
+
+                <button id="recalculate-btn" style="margin-top: 5px;">Recalculate Heatmap</button>
             </div>
 
-            <div class="legend">
-                <div class="legend-row"><strong>Landing Suitability</strong></div>
-                <div class="grad"></div>
-                <div class="legend-text">
-                    <span>Low (Poor)</span>
-                    <span>High (Optimal)</span>
+            <div class="sidebar-footer">
+                <div class="legend">
+                    <div class="legend-row"
+                        style="font-size: 10px; opacity: 0.8; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">
+                        Landing Suitability</div>
+                    <div class="grad"></div>
+                    <div class="legend-text">
+                        <span>Low (Poor)</span>
+                        <span>High (Optimal)</span>
+                    </div>
                 </div>
             </div>
-
-            <button id="calculate-btn">RE-CALCULATE HEATMAP</button>
         </aside>
 
         <div id="map"></div>
+
+        <!-- Loading Overlay -->
+        <div id="loading-overlay" class="loading-overlay hidden">
+            <div class="loading-content">
+                <div class="spinner"></div>
+                <p>Recalculating Heatmap...</p>
+            </div>
+        </div>
     </div>
 
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
-    <!-- Application Logic -->
+    <!-- Custom Application Logic -->
     <script src="app.js"></script>
 </body>
 

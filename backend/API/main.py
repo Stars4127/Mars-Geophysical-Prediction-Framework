@@ -159,4 +159,9 @@ async def get_meta():
     }
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Explicitly ensure engine is loaded before starting the server
+    print("🚀 Pre-loading NovaEngine...")
+    from engine import engine
+    
+    print("🛰️ Starting NovaScope API Server...")
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

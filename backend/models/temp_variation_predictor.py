@@ -309,3 +309,10 @@ if __name__ == "__main__":
     #predictor.tune(n_trials=25, max_epochs=15)
     #predictor.train_best(max_epochs=300)
     predictor.load_and_eval()
+
+# Metrics
+# Dropped 5995 rows containing NaNs. Remaining: 261400
+# Spatial Split -> Train: 183319, Val: 51896, Test: 26185
+# ✅ Preprocessing complete
+# 📊 Ensemble Test R²: -1.3688 | MAE: 3.7732
+# 💡 Mean Uncertainty (StdDev): 3.1622

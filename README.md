@@ -18,6 +18,4 @@ The project relies on a structured Mars dataset as the base for all models, foll
 4.  **Operational Feasibility**: Determine survivability factors like temperature extremes and frost likelihood.
 
 ## Current Tasks
-- [ ] Work on the Landing Goodness Score logic
-- [ ] Start frontend / web app
 - [ ] Fix the ti variance and temp variation predictors, holy they are buns rn

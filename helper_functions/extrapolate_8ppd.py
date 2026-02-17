@@ -151,15 +151,15 @@ def engineer_features(df, features_list):
     return df, out_features
 
 def main():
-    print("🚀 Starting 8ppd Extrapolation (Direct Native Mode)...")
+    print(" Starting 8ppd Extrapolation (Direct Native Mode)...")
     
     # 1. Load 2ppd data ONLY for fitting scalers
-    print("📖 Loading 2ppd data for scaler fitting...")
+    print(" Loading 2ppd data for scaler fitting...")
     df_2ppd = pd.read_csv(CORE_2PPD_PATH, na_values=['null', 'Null', 'NULL'])
     
     # Prepare Scalers and Models
     for info in MODELS_INFO:
-        print(f"🛠  Preparing {info['name']} model...")
+        print(f"  Preparing {info['name']} model...")
         
         # Load params
         params_path = os.path.join(info['dir'], "best_params.json")
@@ -207,7 +207,7 @@ def main():
             info['models'].append(model)
 
     # 2. Process 8ppd data in chunks (No more lookup needed!)
-    print(f"📖 Reading 8ppd features from {FEATURES_8PPD_PATH}...")
+    print(f" Reading 8ppd features from {FEATURES_8PPD_PATH}...")
     chunk_size = 500000
     reader = pd.read_csv(FEATURES_8PPD_PATH, chunksize=chunk_size)
     
@@ -280,7 +280,7 @@ def main():
         results_chunk.to_csv(OUTPUT_PATH, mode=mode, header=header, index=False)
         first_chunk = False
 
-    print(f"✅ Extrapolation complete! Saved to {OUTPUT_PATH}")
+    print(f" Extrapolation complete! Saved to {OUTPUT_PATH}")
 
 if __name__ == "__main__":
     main()

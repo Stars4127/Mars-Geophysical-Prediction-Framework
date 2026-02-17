@@ -50,4 +50,4 @@ merged[non_numeric_cols] = merged[non_numeric_cols].fillna("")
 # Save merged CSV
 # ============================
 merged.to_csv(OUTPUT_PATH, index=False)
-print(f"✅ All CSVs merged into {OUTPUT_PATH}, total rows: {len(merged)}")
+print(f" All CSVs merged into {OUTPUT_PATH}, total rows: {len(merged)}")

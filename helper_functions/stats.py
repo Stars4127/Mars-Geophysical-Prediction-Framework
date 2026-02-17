@@ -59,4 +59,4 @@ for col in var_cols:
 # --- SAVE STATS CSV ---
 stats_df = pd.DataFrame(stats_list)
 stats_df.to_csv(OUTPUT_STATS, index=False)
-print(f"✅ Saved dataset stats to {OUTPUT_STATS}")
+print(f" Saved dataset stats to {OUTPUT_STATS}")

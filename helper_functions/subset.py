@@ -22,10 +22,10 @@ lon_edges = np.linspace(-180, 180, LON_BINS + 1)
 
 def main():
     if not os.path.exists(INPUT_PATH):
-        print(f"❌ Input file not found: {INPUT_PATH}")
+        print(f" Input file not found: {INPUT_PATH}")
         return
 
-    print(f"🚀 Refactoring subset with coordinate transformation...")
+    print(f" Refactoring subset with coordinate transformation...")
     
     first_chunk = True
     total_rows = 0
@@ -79,12 +79,12 @@ def main():
         total_sampled += len(sampled_chunk)
         first_chunk = False
 
-    print(f"\n✅ Done!")
-    print(f"📊 Processed: {total_rows:,} rows")
-    print(f"📊 Sampled: {total_sampled:,} rows")
-    print(f"🌐 Full Range Lat: {global_min_lat:.2f} to {global_max_lat:.2f}")
-    print(f"🌐 Full Range Lon: {global_min_lon:.2f} to {global_max_lon:.2f}")
-    print(f"💾 {OUTPUT_PATH}")
+    print(f"\n Done!")
+    print(f" Processed: {total_rows:,} rows")
+    print(f" Sampled: {total_sampled:,} rows")
+    print(f" Full Range Lat: {global_min_lat:.2f} to {global_max_lat:.2f}")
+    print(f" Full Range Lon: {global_min_lon:.2f} to {global_max_lon:.2f}")
+    print(f" {OUTPUT_PATH}")
 
 if __name__ == "__main__":
     main()

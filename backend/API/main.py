@@ -22,7 +22,7 @@ NASA_TILE_URL = (
 
 from engine import engine
 
-app = FastAPI(title="NovaScope API", description="Martian Landing Site Selection Intelligence")
+app = FastAPI(title="MSPF API", description="Martian Landing Site Selection Intelligence")
 
 app.add_middleware(
     CORSMiddleware,
@@ -88,7 +88,7 @@ async def proxy_tile(z: int, x: int, y: int):
 
 @app.get("/")
 async def root():
-    return {"message": "NovaScope API is Operational. Welcome to Mars."}
+    return {"message": "MSPF API is Operational. Welcome to Mars."}
 
 @app.post("/api/v1/calculate")
 async def calculate_goodness(weights: Weights):
@@ -144,7 +144,7 @@ def get_heatmap_tile(z: int, x: int, y: int,
 @app.get("/api/v1/meta")
 async def get_meta():
     return {
-        "dataset": "NovaScope 8ppd Global Extrapolation",
+        "dataset": "MSPF 8ppd Global Extrapolation",
         "models": ["Water", "Dust", "Surface_Temp", "Temp_Variation", "Gravity", "TI_Variance"],
         "resolution": "8 ppd (pixels per degree)",
         "total_points": len(engine.df) if engine.df is not None else 0
@@ -152,8 +152,8 @@ async def get_meta():
 
 if __name__ == "__main__":
     # Explicitly ensure engine is loaded before starting the server
-    print("🚀 Pre-loading NovaEngine...")
+    print(" Pre-loading MSPF...")
     from engine import engine
     
-    print("🛰️ Starting NovaScope API Server...")
+    print(" Starting MSPF API Server...")
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

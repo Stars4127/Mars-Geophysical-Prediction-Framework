@@ -72,4 +72,4 @@ merged_df["Lat"] = ys
 
 # --- Save CSV ---
 merged_df.to_csv(OUTPUT_CSV, index=False)
-print(f"✅ Saved merged CSV to {OUTPUT_CSV}")
+print(f" Saved merged CSV to {OUTPUT_CSV}")

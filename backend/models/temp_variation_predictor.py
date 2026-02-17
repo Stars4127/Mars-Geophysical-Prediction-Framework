@@ -26,7 +26,7 @@ torch.manual_seed(SEED)
 
 device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 os.makedirs(MODEL_DIR, exist_ok=True)
-print(f"🔥 Using device: {device}")
+print(f" Using device: {device}")
 
 
 # =============================
@@ -86,14 +86,14 @@ class TempVariationPredictor:
         y = df[self.target_column]
         mean_y, std_y = y.mean(), y.std()
         n_outliers = ((y - mean_y).abs() > 3*std_y).sum()
-        print(f"✅ Target '{self.target_column}' stats:")
+        print(f" Target '{self.target_column}' stats:")
         print(f"   - Missing: {y.isna().sum()} / {len(df)} ({y.isna().mean()*100:.2f}%)")
         print(f"   - Min: {y.min():.3f} | Max: {y.max():.3f} | Mean: {mean_y:.3f} | Std: {std_y:.3f}")
         print(f"   - Outliers (>3σ): {n_outliers} points ({n_outliers/len(df)*100:.2f}%)")
         
         lower, upper = mean_y - 3*std_y, mean_y + 3*std_y
         df[self.target_column] = df[self.target_column].clip(lower, upper)
-        print(f"📌 Target clipped to ±3σ range: [{lower:.2f}, {upper:.2f}]")
+        print(f" Target clipped to ±3σ range: [{lower:.2f}, {upper:.2f}]")
         lat_col = 'Latitude (N)'
         asp_col = 'MOLA 128ppd Aspect'
         
@@ -123,7 +123,7 @@ class TempVariationPredictor:
             
         original_len = len(df)
         df = df.dropna()
-        print(f"📉 Dropped {original_len - len(df)} rows containing NaNs. Remaining: {len(df)}")
+        print(f" Dropped {original_len - len(df)} rows containing NaNs. Remaining: {len(df)}")
         
         if len(df) == 0:
             raise ValueError("Dataset is empty after preprocessing!")
@@ -173,7 +173,7 @@ class TempVariationPredictor:
         self.y_val_tensor = torch.tensor(self.y_val, dtype=torch.float32).view(-1, 1).to(device)
         self.x_test_tensor = torch.tensor(self.x_test, dtype=torch.float32).to(device)
 
-        print("✅ Preprocessing complete")
+        print(" Preprocessing complete")
 
     # ----------------------------
     # Training loop
@@ -253,7 +253,7 @@ class TempVariationPredictor:
 
         with open(PARAMS_PATH, 'w') as f:
             json.dump(self.best_params, f, indent=2)
-        print("✅ Best params saved:", self.best_params)
+        print(" Best params saved:", self.best_params)
 
     # ----------------------------
     # Train best model (Ensemble)
@@ -272,7 +272,7 @@ class TempVariationPredictor:
         weight_decay = params.get("weight_decay", 0.0)
         dropout = params.get("dropout", 0.0)
 
-        print(f"🚀 Training Ensemble of {ENSEMBLE_SIZE} models...")
+        print(f" Training Ensemble of {ENSEMBLE_SIZE} models...")
         for i in range(ENSEMBLE_SIZE):
             print(f"\n--- Training Member {i+1}/{ENSEMBLE_SIZE} ---")
             torch.manual_seed(SEED + i)
@@ -281,9 +281,9 @@ class TempVariationPredictor:
             
             save_path = f"{MODEL_DIR}/model_{i}.pt"
             torch.save(model.state_dict(), save_path)
-            print(f"✅ Member {i+1} saved to {save_path}")
+            print(f" Member {i+1} saved to {save_path}")
 
-        print(f"💾 Ensemble training complete in {MODEL_DIR}")
+        print(f" Ensemble training complete in {MODEL_DIR}")
 
     # ----------------------------
     # Load and evaluate (Ensemble)
@@ -318,8 +318,8 @@ class TempVariationPredictor:
         r2 = r2_score(self.y_test_raw, mean_pred)
         mae = mean_absolute_error(self.y_test_raw, mean_pred)
 
-        print(f"📊 Ensemble Test R²: {r2:.4f} | MAE: {mae:.4f}")
-        print(f"💡 Mean Uncertainty (StdDev): {uncertainty.mean():.4f}")
+        print(f" Ensemble Test R²: {r2:.4f} | MAE: {mae:.4f}")
+        print(f" Mean Uncertainty (StdDev): {uncertainty.mean():.4f}")
         
         return mean_pred, uncertainty
 
@@ -350,6 +350,6 @@ if __name__ == "__main__":
 # Metrics
 # Dropped 5995 rows containing NaNs. Remaining: 261400
 # Spatial Split -> Train: 183319, Val: 51896, Test: 26185
-# ✅ Preprocessing complete
-# 📊 Ensemble Test R²: -1.3688 | MAE: 3.7732
-# 💡 Mean Uncertainty (StdDev): 3.1622
+#  Preprocessing complete
+#  Ensemble Test R²: -1.3688 | MAE: 3.7732
+#  Mean Uncertainty (StdDev): 3.1622

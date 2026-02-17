@@ -15,7 +15,7 @@ def raw_to_geo(lat_raw, lon_raw):
     lon = (lon_raw / SCALE) - 180
     return lat, lon
 
-class NovaEngine:
+class MSPF:
     def __init__(self):
         self.df = None
         self.tree = None
@@ -30,15 +30,15 @@ class NovaEngine:
 
     def load_data(self):
         if not os.path.exists(DATA_PATH):
-            print(f"❌ Data file not found at {DATA_PATH}")
+            print(f" Data file not found at {DATA_PATH}")
             return
 
-        print(f"📖 Lazy-loading 8ppd index from Parquet...")
+        print(f" Lazy-loading 8ppd index from Parquet...")
         self.df = pd.read_parquet(DATA_PATH, columns=['Lat', 'Lon'])
         self.df['Lat'], self.df['Lon'] = raw_to_geo(self.df['Lat'].values, self.df['Lon'].values)
         self.df['Lon'] = ((self.df['Lon'] + 180) % 360) - 180
 
-        print("📊 Extracting normalization stats from Parquet Metadata...")
+        print(" Extracting normalization stats from Parquet Metadata...")
         features = ['Water', 'Dust', 'Surface_Temp', 'Temp_Variation', 'Gravity', 'TI_Variance']
         all_cols = features + [f + "_Uncertainty" for f in features]
         
@@ -59,9 +59,9 @@ class NovaEngine:
                             }
                         break
 
-        print("🌲 Building Spatial Index (cKDTree)...")
+        print(" Building Spatial Index (cKDTree)...")
         self.tree = cKDTree(self.df[['Lat', 'Lon']].values)
-        print("✅ engine ready.")
+        print(" engine ready.")
 
     def get_nearest_point(self, lat, lon):
         dist, idx = self.tree.query([lat, lon])
@@ -85,7 +85,7 @@ class NovaEngine:
         e.g. {"Water": 1.0, "Surface_Temp": 0.5, "Uncertainty_Penalty": 0.8}
         """
         if self.df is None:
-            print("⚠️ Engine: DataFrame is missing!")
+            print(" Engine: DataFrame is missing!")
             return []
 
         try:
@@ -176,11 +176,11 @@ class NovaEngine:
                     "score": round(float(final_scores[i]), 2)
                 })
 
-            print(f"✅ Success: Calculated {len(results)} points.")
+            print(f" Success: Calculated {len(results)} points.")
             return results
 
         except Exception as e:
-            print(f"❌ Backend Error in calculate_goodness: {e}")
+            print(f" Backend Error in calculate_goodness: {e}")
             raise e
 
 
@@ -209,13 +209,13 @@ class NovaEngine:
             import io
 
             if self.last_global_stats['weights'] != weights:
-                print("⚠️ Tile Engine: Global stats outdated for requested weights. Synchronizing...")
+                print(" Tile Engine: Global stats outdated for requested weights. Synchronizing...")
                 self.calculate_goodness(weights)
             
             global_stats = self.last_global_stats
             
             if 'p5' not in global_stats or 'p95' not in global_stats:
-                print("⚠️ Tile Engine: Missing global stats. Computing now...")
+                print(" Tile Engine: Missing global stats. Computing now...")
                 self.calculate_goodness(weights)
                 global_stats = self.last_global_stats
 
@@ -349,4 +349,4 @@ class NovaEngine:
         return buf.getvalue()
 
 # Singleton instance
-engine = NovaEngine()
+engine = MSPF()

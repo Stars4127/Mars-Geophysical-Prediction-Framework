@@ -37,8 +37,8 @@ def main():
 
     # Replace original file
     os.replace(TEMP_PATH, FILE_PATH)
-    print(f"\n✅ Done! Total rows processed: {total_rows:,}")
-    print(f"💾 Original CSV overwritten with compressed version: {FILE_PATH}")
+    print(f"\n Done! Total rows processed: {total_rows:,}")
+    print(f" Original CSV overwritten with compressed version: {FILE_PATH}")
 
 if __name__ == "__main__":
     main()

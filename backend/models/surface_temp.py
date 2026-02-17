@@ -28,7 +28,7 @@ torch.manual_seed(SEED)
 
 device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 os.makedirs(MODEL_DIR, exist_ok=True)
-print(f"🔥 Using device: {device}")
+print(f" Using device: {device}")
 
 
 # =============================
@@ -100,7 +100,7 @@ class TempPredictor:
             
         original_len = len(df)
         df = df.dropna()
-        print(f"📉 Dropped {original_len - len(df)} rows containing NaNs. Remaining: {len(df)}")
+        print(f" Dropped {original_len - len(df)} rows containing NaNs. Remaining: {len(df)}")
         
         if len(df) == 0:
             raise ValueError("Dataset is empty after preprocessing! Check your features for 100% NaN columns.")
@@ -155,7 +155,7 @@ class TempPredictor:
         self.y_val_tensor = torch.tensor(self.y_val, dtype=torch.float32).view(-1, 1).to(device)
         self.x_test_tensor = torch.tensor(self.x_test, dtype=torch.float32).to(device)
 
-        print("✅ Preprocessing complete")
+        print(" Preprocessing complete")
 
     # ----------------------------
     # Training loop
@@ -236,7 +236,7 @@ class TempPredictor:
         # Save best params
         with open(PARAMS_PATH, 'w') as f:
             json.dump(self.best_params, f, indent=2)
-        print("✅ Best params saved:", self.best_params)
+        print(" Best params saved:", self.best_params)
 
     # ----------------------------
     # Train best model (Ensemble)
@@ -253,7 +253,7 @@ class TempPredictor:
         units = params["units"]
         activation = params["activation"]
 
-        print(f"🚀 Training Ensemble of {ENSEMBLE_SIZE} models...")
+        print(f" Training Ensemble of {ENSEMBLE_SIZE} models...")
         # Ensure MODEL_DIR exists
         os.makedirs(MODEL_DIR, exist_ok=True)
 
@@ -266,9 +266,9 @@ class TempPredictor:
             
             save_path = f"{MODEL_DIR}/model_{i}.pt"
             torch.save(model.state_dict(), save_path)
-            print(f"✅ Member {i+1} saved to {save_path}")
+            print(f" Member {i+1} saved to {save_path}")
 
-        print(f"💾 Ensemble training complete in {MODEL_DIR}")
+        print(f" Ensemble training complete in {MODEL_DIR}")
         # self.model is set to the last trained model, but for ensemble,
         # individual models are loaded during evaluation.
         self.model = model 
@@ -284,7 +284,7 @@ class TempPredictor:
             params = json.load(f)
 
         all_preds = []
-        print(f"🔍 Loading Ensemble of {ENSEMBLE_SIZE} models from {MODEL_DIR}...")
+        print(f" Loading Ensemble of {ENSEMBLE_SIZE} models from {MODEL_DIR}...")
 
         for i in range(ENSEMBLE_SIZE):
             model = TempANN(len(self.features), params["layers"], params["units"], params["activation"]).to(device)
@@ -309,8 +309,8 @@ class TempPredictor:
         r2 = r2_score(self.y_test_raw, mean_pred)
         mae = mean_absolute_error(self.y_test_raw, mean_pred)
 
-        print(f"📊 Ensemble Test R²: {r2:.4f} | MAE: {mae:.4f}")
-        print(f"💡 Mean Uncertainty (StdDev): {uncertainty.mean():.4f}")
+        print(f" Ensemble Test R²: {r2:.4f} | MAE: {mae:.4f}")
+        print(f" Mean Uncertainty (StdDev): {uncertainty.mean():.4f}")
         
         return mean_pred, uncertainty
 
@@ -338,9 +338,9 @@ if __name__ == "__main__":
     predictor.load_and_eval()
 
 # Metrics
-# 📉 Dropped 5995 rows containing NaNs. Remaining: 261400
+#  Dropped 5995 rows containing NaNs. Remaining: 261400
 # Spatial Split -> Train: 183319, Val: 51896, Test: 26185
-# ✅ Preprocessing complete
-# 🔍 Loading Ensemble of 5 models from backend/models/neural_nets/temp_predictor...
-# 📊 Ensemble Test R²: 0.7822 | MAE: 2.3193
-# 💡 Mean Uncertainty (StdDev): 1.6222
+#  Preprocessing complete
+#  Loading Ensemble of 5 models from backend/models/neural_nets/temp_predictor...
+#  Ensemble Test R²: 0.7822 | MAE: 2.3193
+#  Mean Uncertainty (StdDev): 1.6222

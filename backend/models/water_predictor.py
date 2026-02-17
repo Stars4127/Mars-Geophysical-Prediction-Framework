@@ -27,7 +27,7 @@ np.random.seed(SEED)
 torch.manual_seed(SEED)
 
 device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
-print(f"🔥 Using device: {device}")
+print(f" Using device: {device}")
 
 # =============================
 # Model
@@ -102,7 +102,7 @@ class WaterPredictor:
         print(f"Original size: {len(df)}")
         original_len = len(df)
         df = df.dropna()
-        print(f"📉 Dropped {original_len - len(df)} rows containing NaNs. Remaining: {len(df)}")
+        print(f" Dropped {original_len - len(df)} rows containing NaNs. Remaining: {len(df)}")
         
         if len(df) == 0:
             raise ValueError("Dataset is empty after preprocessing!")
@@ -155,7 +155,7 @@ class WaterPredictor:
         self.y_val = torch.tensor(self.y_val, dtype=torch.float32).view(-1, 1).to(device)
         self.X_test = torch.tensor(X_test, dtype=torch.float32).to(device)
 
-        print("✅ Preprocessing complete")
+        print(" Preprocessing complete")
 
     # -------------------------
     # Train loop
@@ -245,14 +245,14 @@ class WaterPredictor:
         with open(PARAMS_PATH, "w") as f:
             json.dump(self.best_params, f, indent=2)
 
-        print("🏆 Best params saved:", self.best_params)
+        print(" Best params saved:", self.best_params)
 
     # -------------------------
     # Train best
     # -------------------------
     def train_best(self, max_epochs=300):
         if not os.path.exists(PARAMS_PATH):
-            raise RuntimeError("❌ No saved params. Run tune() first.")
+            raise RuntimeError(" No saved params. Run tune() first.")
 
         with open(PARAMS_PATH) as f:
             self.best_params = json.load(f)
@@ -264,7 +264,7 @@ class WaterPredictor:
         }
         lr = self.best_params["lr"]
 
-        print(f"🚀 Training Ensemble of {ENSEMBLE_SIZE} models...")
+        print(f" Training Ensemble of {ENSEMBLE_SIZE} models...")
         for i in range(ENSEMBLE_SIZE):
             print(f"\n--- Training Member {i+1}/{ENSEMBLE_SIZE} ---")
             # Diverge seed for initialization variety
@@ -275,9 +275,9 @@ class WaterPredictor:
             
             save_path = f"{MODEL_DIR}/model_{i}.pt"
             torch.save(model.state_dict(), save_path)
-            print(f"✅ Member {i+1} saved to {save_path}")
+            print(f" Member {i+1} saved to {save_path}")
 
-        print(f"💾 Ensemble training complete in {MODEL_DIR}")
+        print(f" Ensemble training complete in {MODEL_DIR}")
 
     # -------------------------
     # Load + Evaluate
@@ -296,7 +296,7 @@ class WaterPredictor:
         }
 
         all_preds = []
-        print(f"🔍 Loading Ensemble of {ENSEMBLE_SIZE} models from {MODEL_DIR}...")
+        print(f" Loading Ensemble of {ENSEMBLE_SIZE} models from {MODEL_DIR}...")
         
         for i in range(ENSEMBLE_SIZE):
             model = WaterANN(len(self.features), **model_params).to(device)
@@ -322,8 +322,8 @@ class WaterPredictor:
         r2 = r2_score(self.y_test_raw, mean_pred)
         mae = mean_absolute_error(self.y_test_raw, mean_pred)
 
-        print(f"📊 Ensemble Test R²: {r2:.4f} | MAE: {mae:.4f}")
-        print(f"💡 Mean Uncertainty (StdDev): {uncertainty.mean():.4f}")
+        print(f" Ensemble Test R²: {r2:.4f} | MAE: {mae:.4f}")
+        print(f" Mean Uncertainty (StdDev): {uncertainty.mean():.4f}")
         
         return mean_pred, uncertainty
 
@@ -350,9 +350,9 @@ if __name__ == "__main__":
 
 # Metrics
 # Original size: 267395
-# 📉 Dropped 5827 rows containing NaNs. Remaining: 261568
+#  Dropped 5827 rows containing NaNs. Remaining: 261568
 # Spatial Split -> Train: 183319, Val: 52064, Test: 26185
-# ✅ Preprocessing complete
-# 🔍 Loading Ensemble of 5 models from backend/models/neural_nets/water_predictor...
-# 📊 Ensemble Test R²: 0.4894 | MAE: 9.2205
-# 💡 Mean Uncertainty (StdDev): 7.0021
+#  Preprocessing complete
+#  Loading Ensemble of 5 models from backend/models/neural_nets/water_predictor...
+#  Ensemble Test R²: 0.4894 | MAE: 9.2205
+#  Mean Uncertainty (StdDev): 7.0021

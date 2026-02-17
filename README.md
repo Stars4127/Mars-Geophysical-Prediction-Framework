@@ -1,4 +1,4 @@
-# Nova Scope 2: Mars Landing Zone ML Project
+# MSPF 2: Mars Landing Zone ML Project
 
 ## Project Overview
 This project aims to create an AI-assisted landing site evaluation system for Mars. The system generates a **Landing Goodness Score** for any latitude-longitude location, helping users (e.g., scientists or mission planners) identify preliminary landing zones that are safe, scientifically valuable, and operationally feasible.

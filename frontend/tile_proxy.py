@@ -77,8 +77,8 @@ async def proxy_tile(z: int, x: int, y: int):
 async def prefetch_tiles(max_zoom: int):
     import asyncio
     
-    print(f"🚀 Starting SAFE pre-fetch for Zoom 0 to {max_zoom}...")
-    print(f"🔑 Using API Key: {API_KEY[:5]}...{API_KEY[-5:]}")
+    print(f" Starting SAFE pre-fetch for Zoom 0 to {max_zoom}...")
+    print(f" Using API Key: {API_KEY[:5]}...{API_KEY[-5:]}")
     
     timeout = httpx.Timeout(connect=10, read=60, write=10, pool=10)
     limits = httpx.Limits(max_connections=20, max_keepalive_connections=10)
@@ -115,9 +115,9 @@ async def prefetch_tiles(max_zoom: int):
                 await asyncio.gather(*tasks)
             
     if state["stop"]:
-        print("\n🛑 Pre-fetch HALTED due to API rate limiting (403/429).")
+        print("\n Pre-fetch HALTED due to API rate limiting (403/429).")
     else:
-        print("\n✅ Pre-fetch complete!")
+        print("\n Pre-fetch complete!")
 
 async def download_tile(client, sem, z, x, y, state):
     if state["stop"]: return

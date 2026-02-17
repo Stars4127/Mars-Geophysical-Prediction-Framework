@@ -1,6 +1,8 @@
 {
-  "layers": 2,
-  "units": 48,
-  "activation": "relu",
-  "lr": 0.003927523359333243
+  "layers": 5,
+  "units": 96,
+  "activation": "elu",
+  "lr": 3.995309451393714e-05,
+  "weight_decay": 0.0009843644025763962,
+  "dropout": 0.07509472643486552
 }

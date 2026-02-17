@@ -82,6 +82,14 @@
                     <input type="range" id="weight-ti-var" min="0" max="1" step="0.05" value="0.0">
                 </div>
 
+                <div class="control-group">
+                    <div class="label-row">
+                        <label>Uncertainty Penalty</label>
+                        <span class="weight-val" id="val-uncertainty">0.5</span>
+                    </div>
+                    <input type="range" id="weight-uncertainty" min="0" max="1" step="0.05" value="0.5">
+                </div>
+
                 <div class="control-group"
                     style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--glass-border);">
                     <div class="label-row">
@@ -109,6 +117,14 @@
         </aside>
 
         <div id="map"></div>
+
+        <!-- Coordinates Box -->
+        <div id="coord-display">
+            <span class="coord-label">LAT</span>
+            <span id="lat-display">0.00</span>
+            <span class="coord-label">LON</span>
+            <span id="lon-display">0.00</span>
+        </div>
 
         <!-- Loading Overlay -->
         <div id="loading-overlay" class="loading-overlay hidden">

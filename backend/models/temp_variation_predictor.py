@@ -33,13 +33,29 @@ print(f"🔥 Using device: {device}")
 # MLP model
 # =============================
 class TempVariationANN(nn.Module):
-    def __init__(self, input_dim, layers, units, activation):
+    def __init__(self, input_dim, layers, units, activation, dropout=0.0):
         super().__init__()
-        act_fn = nn.ReLU() if activation == "relu" else nn.Tanh()
+        if activation == "relu":
+            act_fn = nn.ReLU()
+        elif activation == "tanh":
+            act_fn = nn.Tanh()
+        elif activation == "leaky_relu":
+            act_fn = nn.LeakyReLU()
+        elif activation == "gelu":
+            act_fn = nn.GELU()
+        elif activation == "elu":
+            act_fn = nn.ELU()
+        elif activation == "sigmoid":
+            act_fn = nn.Sigmoid()
+        else:
+            act_fn = nn.ReLU()
+            
         net = []
         prev_dim = input_dim
         for _ in range(layers):
             net.append(nn.Linear(prev_dim, units))
+            if dropout > 0:
+                net.append(nn.Dropout(dropout))
             net.append(act_fn)
             prev_dim = units
         net.append(nn.Linear(prev_dim, 1))
@@ -66,7 +82,18 @@ class TempVariationPredictor:
     # ----------------------------
     def preprocess(self):
         df = pd.read_csv(self.path)
+
+        y = df[self.target_column]
+        mean_y, std_y = y.mean(), y.std()
+        n_outliers = ((y - mean_y).abs() > 3*std_y).sum()
+        print(f"✅ Target '{self.target_column}' stats:")
+        print(f"   - Missing: {y.isna().sum()} / {len(df)} ({y.isna().mean()*100:.2f}%)")
+        print(f"   - Min: {y.min():.3f} | Max: {y.max():.3f} | Mean: {mean_y:.3f} | Std: {std_y:.3f}")
+        print(f"   - Outliers (>3σ): {n_outliers} points ({n_outliers/len(df)*100:.2f}%)")
         
+        lower, upper = mean_y - 3*std_y, mean_y + 3*std_y
+        df[self.target_column] = df[self.target_column].clip(lower, upper)
+        print(f"📌 Target clipped to ±3σ range: [{lower:.2f}, {upper:.2f}]")
         lat_col = 'Latitude (N)'
         asp_col = 'MOLA 128ppd Aspect'
         
@@ -151,9 +178,9 @@ class TempVariationPredictor:
     # ----------------------------
     # Training loop
     # ----------------------------
-    def _train(self, model, lr, max_epochs=250, patience=15, trial_idx=None):
+    def _train(self, model, lr, max_epochs=250, patience=15, trial_idx=None, weight_decay=0.0):
         model.to(device)
-        optimizer = optim.Adam(model.parameters(), lr=lr)
+        optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
         criterion = nn.MSELoss()
 
         best_loss = float("inf")
@@ -202,21 +229,23 @@ class TempVariationPredictor:
     # ----------------------------
     # Hyperparameter tuning
     # ----------------------------
-    def tune(self, n_trials=25, max_epochs=15):
+    def tune(self, n_trials=50, max_epochs=25):
         def objective(trial):
-            layers = trial.suggest_int("layers", 1, 4)
-            units = trial.suggest_int("units", 16, 128, step=16)
-            activation = trial.suggest_categorical("activation", ["relu", "tanh"])
-            lr = trial.suggest_float("lr", 1e-4, 1e-2, log=True)
+            layers = trial.suggest_int("layers", 1, 6)  # expanded from 1-4
+            units = trial.suggest_int("units", 16, 256, step=16)  # expanded from 16-128
+            activation = trial.suggest_categorical("activation", ["relu", "tanh", "leaky_relu", "gelu", "elu", "sigmoid"])
+            lr = trial.suggest_float("lr", 1e-5, 1e-2, log=True)
+            weight_decay = trial.suggest_float("weight_decay", 1e-6, 1e-3, log=True)
+            dropout = trial.suggest_float("dropout", 0.0, 0.3)
 
-            model = TempVariationANN(len(self.features), layers, units, activation).to(device)
-            self._train(model, lr=lr, max_epochs=max_epochs, trial_idx=trial.number)
+            model = TempVariationANN(len(self.features), layers, units, activation, dropout=dropout).to(device)
+            self._train(model, lr=lr, max_epochs=max_epochs, trial_idx=trial.number, weight_decay=weight_decay)
 
             model.eval()
             with torch.no_grad():
                 preds = model(self.x_val_tensor).cpu().numpy().flatten()
             r2 = r2_score(self.y_val, preds)
-            return r2  # Optuna defaults to minimize, so we'll return r2 and set direction to maximize
+            return r2  # maximize R²
 
         study = optuna.create_study(direction="maximize")
         study.optimize(objective, n_trials=n_trials)
@@ -240,13 +269,15 @@ class TempVariationPredictor:
         layers = params["layers"]
         units = params["units"]
         activation = params["activation"]
+        weight_decay = params.get("weight_decay", 0.0)
+        dropout = params.get("dropout", 0.0)
 
         print(f"🚀 Training Ensemble of {ENSEMBLE_SIZE} models...")
         for i in range(ENSEMBLE_SIZE):
             print(f"\n--- Training Member {i+1}/{ENSEMBLE_SIZE} ---")
             torch.manual_seed(SEED + i)
-            model = TempVariationANN(len(self.features), layers, units, activation)
-            model = self._train(model, lr, max_epochs=max_epochs)
+            model = TempVariationANN(len(self.features), layers, units, activation, dropout=dropout)
+            model = self._train(model, lr, max_epochs=max_epochs, weight_decay=weight_decay)
             
             save_path = f"{MODEL_DIR}/model_{i}.pt"
             torch.save(model.state_dict(), save_path)
@@ -266,7 +297,13 @@ class TempVariationPredictor:
 
         all_preds = []
         for i in range(ENSEMBLE_SIZE):
-            model = TempVariationANN(len(self.features), params["layers"], params["units"], params["activation"]).to(device)
+            model = TempVariationANN(
+                len(self.features), 
+                params["layers"], 
+                params["units"], 
+                params["activation"],
+                dropout=params.get("dropout", 0.0)
+            ).to(device)
             save_path = f"{MODEL_DIR}/model_{i}.pt"
             model.load_state_dict(torch.load(save_path, map_location=device, weights_only=True))
             model.eval()
@@ -306,8 +343,8 @@ if __name__ == "__main__":
         ]
     )
     predictor.preprocess()
-    #predictor.tune(n_trials=25, max_epochs=15)
-    #predictor.train_best(max_epochs=300)
+    predictor.tune(n_trials=25, max_epochs=15)
+    predictor.train_best(max_epochs=300)
     predictor.load_and_eval()
 
 # Metrics

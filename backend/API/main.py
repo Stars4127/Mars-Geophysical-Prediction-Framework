@@ -24,7 +24,6 @@ from engine import engine
 
 app = FastAPI(title="NovaScope API", description="Martian Landing Site Selection Intelligence")
 
-# Enable CORS for frontend development
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],    
@@ -33,7 +32,6 @@ app.add_middleware(
 )
 
 class Weights(BaseModel):
-    # Mapping model names to their importance
     Water: float = 0.5
     Dust: float = 0.5
     Surface_Temp: float = 0.5
@@ -42,22 +40,17 @@ class Weights(BaseModel):
     TI_Variance: float = 0.5
     Uncertainty_Penalty: float = 0.5
 
-    Uncertainty_Penalty: float = 0.5
-
 @app.get("/tiles/{z}/{x}/{y}.jpg")
 async def proxy_tile(z: int, x: int, y: int):
-    # ---- TILE BOUNDS GUARD (2:1 Aspect Ratio for Global Mars) ----
+    # EPSG:4326 base tiles are typically 2:1 ratio
+    max_x = 2 ** (z + 1)
     max_y = 2 ** z
-    max_x = 2 * max_y  # Global maps are usually 2:1 (360 deg width vs 180 deg height)
     
     if x < 0 or y < 0 or x >= max_x or y >= max_y:
-        return Response(status_code=404) # 404 for out of bounds
+        return Response(status_code=404)
 
     cache_path = os.path.join(CACHE_DIR, f"{z}_{x}_{y}.jpg")
     
-    # Cache for 1 year (immutable)
-    headers = {"Cache-Control": "public, max-age=31536000, immutable"}
-
     if os.path.exists(cache_path) and os.path.getsize(cache_path) > 0:
         with open(cache_path, "rb") as f:
             return Response(f.read(), media_type="image/jpeg", headers=headers)
@@ -69,12 +62,11 @@ async def proxy_tile(z: int, x: int, y: int):
 
     async with httpx.AsyncClient(timeout=timeout, limits=limits, follow_redirects=True) as client:
         try:
-            # Simple retry logic for 503s
             for attempt in range(3):
                 try:
                     r = await client.get(url)
                     r.raise_for_status()
-                    break # Success
+                    break
                 except httpx.HTTPStatusError as e:
                     if e.response.status_code in [500, 502, 503, 504]:
                         if attempt < 2:
@@ -130,8 +122,8 @@ def get_heatmap_tile(z: int, x: int, y: int,
                      temp: float = 0.0, 
                      temp_var: float = 0.0, 
                      gravity: float = 0.0, 
-                     ti_var: float = 0.0):
-    # Map query params to internal engine keys
+                     ti_var: float = 0.0,
+                     uncertainty: float = 0.5):
     weights = {
         "Water": water,
         "Dust": dust,
@@ -139,7 +131,7 @@ def get_heatmap_tile(z: int, x: int, y: int,
         "Temp_Variation": temp_var,
         "Gravity": gravity,
         "TI_Variance": ti_var,
-        "Uncertainty_Penalty": 0.0 # Handled separately later
+        "Uncertainty_Penalty": uncertainty
     }
     
     try:

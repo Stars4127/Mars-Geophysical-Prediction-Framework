@@ -221,12 +221,11 @@ class DustPredictor:
             model = DustANN(len(self.features), layers, units, activation).to(device)
             self._train(model, lr=lr, max_epochs=max_epochs, trial_idx=trial.number)
 
-            # Evaluate on validation
             model.eval()
             with torch.no_grad():
                 preds = model(self.x_val_tensor).cpu().numpy().flatten()
             r2 = r2_score(self.y_val, preds)
-            return -r2  # maximize r2
+            return -r2  
 
         study = optuna.create_study()
         study.optimize(objective, n_trials=n_trials)
@@ -324,7 +323,6 @@ if __name__ == "__main__":
         "MOLA 128ppd Aspect",
         "OMEGA Est. Lambert Albedo 1080nm Ody et al 2012"
     ])
-    #check this but without albedo
     predictor.preprocess()
     # predictor.tune(n_trials=25, max_epochs=10)
     # predictor.train_best()

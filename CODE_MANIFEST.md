@@ -1,7 +1,5 @@
 # MSPF: Code Manifest & Documentation
 
-This document provides a comprehensive index of the code authored during the development of **MSPF**, distinguishing between custom-written logic and acquired/external components.
-
 ---
 
 ## 📑 Index of Core Components
@@ -46,11 +44,11 @@ The following components were sourced from external repositories, libraries, or 
 
 ### 1. Primary Datasets
 - **Core Set**: `core_set_2ppd.csv` (Base collection of Martian planetary features).
+- **8ppd Feature Data**: '8ppd_features_full.csv' (8ppd feature data).
 - **Planetary Sources**:
     - **MOLA**: NASA Mars Orbiter Laser Altimeter (Elevation, Slope, Roughness).
     - **OMEGA/TES**: Mineralogical and thermal datasets (Albedo, Dust, Thermal Inertia).
     - **GRS**: Gamma Ray Spectrometer (Hydrogen/Water proxies).
-
 ### 2. External Libraries (Attributions)
 - **FastAPI/Uvicorn**: High-performance Python web framework.
 - **Leaflet.js**: Open-source JavaScript library for interactive maps.

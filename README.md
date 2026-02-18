@@ -3,37 +3,47 @@
 ![Mars Banner](https://img.shields.io/badge/Mars-Exploration-red?style=for-the-badge&logo=nasa)
 ![Python](https://img.shields.io/badge/Python-3.10+-blue?style=for-the-badge&logo=python)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green?style=for-the-badge&logo=fastapi)
-![ML](https://img.shields.io/badge/ML-Decision%20Support-orange?style=for-the-badge&logo=scikit-learn)
+![PyTorch](https://img.shields.io/badge/PyTorch-Machine%20Learning-EE4C2C?style=for-the-badge&logo=pytorch)
 
-MSPF is a high-performance, AI-assisted decision-support system designed to evaluate and identify optimal landing zones on Mars. By synthesizing multiple environmental and geological factors, NovaScope 2 provides scientists and mission planners with an interactive, data-driven platform for Martian surface exploration.
+## 📖 Abstract
+
+Selecting sites for planetary exploration is a difficult task. Changing regions, outdated planetary scans, the vast scope of the Martian surface, and low‑resolution subsurface data complicate decision‑making. Traditional methods, which often rely on rover comparisons or low-quality remote sensing, are slow, resource-intensive, and frequently produce inaccurate predictions of subsurface qualities like water concentration.
+
+**MSPF** provides a scalable, machine learning-oriented approach to make initial site selection more efficient. By utilizing low-level surface qualities (topography, mineral densities, and thermal properties), this system predicts critical subsurface parameters at higher resolutions. Using a pipeline of feed-forward MLP neural networks, MSPF systematically evaluates candidate landing sites, reducing the need for exhaustive scanning and reliance on sparse data.
+
+---
+
+## 🔬 Methodology & Architecture
+
+The core of the MSPF framework relies on a robust engineering and machine learning pipeline designed for stability and scientific accuracy:
+
+- **ML Architecture**: Implements multiple feed-forward Multi-Layer Perceptron (MLP) neural networks using **PyTorch**.
+- **Data Engineering**: Features are scaled using `RobustScaler` to ensure convergence and stability. A rigorous spatial train-test split is used to prevent data leakage and ensure global generalizability.
+- **Hyperparameter Optimization**: Models undergo automated tuning through **Bayesian Optimization** (using Optuna’s TPE model) with R² score as the primary objective.
+- **Validation**: Quantitative results are validated against historical Martian landing sites and verified against 8ppd extrapolated ground-truth proxies.
+- **Performance**: Preliminary results indicate that key properties, such as Water-Equivalent Hydrogen (WEH), can be predicted with an **Average R² ≈ 0.66**, providing a high-confidence baseline for mission planning.
 
 ---
 
 ## 🚀 Key Features
 
-- **Multi-Model Predictive Analysis**: Integrates six specialized machine learning models to predict critical surface parameters:
-  - **Water Enrichment (WEH%)**: Estimating subsurface hydrogen.
-  - **Dust Coverage**: Quantifying surface dust distribution.
-  - **Surface Temperatures**: Predicting average and extreme thermal conditions.
-  - **Gravity Anomalies**: Mapping gravitational variations.
-  - **TI Variance**: Analyzing Thermal Inertia stability.
-  - **Temp Variation**: Yearly surface temperature fluctuations.
-- **Dynamic Heatmapping**: A real-time rendering engine that generates a "Landing Goodness Score" based on user-defined weight parameters for scientific priority and safety risk.
-- **High-Resolution Global Data**: Operates on a 8ppd (pixels per degree) extrapolated dataset, providing granular details across the entire Martian globe.
-- **Interactive Map Interface**: A premium, glassmorphism-styled UI powered by Leaflet.js, featuring:
-  - **Live Coordinate Tracking**: Real-time Lat/Lon display on hover.
-  - **Point-Specific Surveys**: Detailed data popups for any clicked location.
-  - **NASA Tile Integration**: Proxied and cached high-resolution Viking MDIM 2.1 global color mosaic.
-- **Performance Optimized**: Built for scale using Parquet lazy loading, chunked computation for 50M+ data points, and intelligent tile caching.
+- **Multi-Model Predictive Analysis**: Six specialized predictors for:
+  - **Water Enrichment (WEH%)**: Subsurface hydrogen estimation.
+  - **Dust Coverage**: Global surface dust distribution.
+  - **Surface Temperatures**: Average and extreme thermal mapping.
+  - **Gravity Anomalies**: Mapping gravitational fluctuations.
+  - **TI Variance**: Analyzing diurnal thermal inertia stability.
+  - **Temp Variation**: Tracking seasonal surface temperature swings.
+- **Dynamic Heatmapping**: A real-time rendering engine generates a "Landing Goodness Score" based on user-defined weights for scientific priority and safety risk.
+- **Interactive Map Interface**: A premium glassmorphism UI featuring live coordinate tracking, point-specific surveys, and cached NASA Viking MDIM 2.1 global mosaics.
 
 ---
 
 ## 🛠️ Technical Stack
 
-- **Backend**: Python 3.10+, FastAPI, NumPy, Pandas, Scikit-learn, Uvicorn.
+- **Backend**: Python 3.10+, FastAPI, PyTorch, NumPy, Pandas, Scikit-learn, Optuna, Uvicorn.
 - **Frontend**: HTML5, CSS3 (Modern Glassmorphism), Vanilla JavaScript, Leaflet.js.
-- **Data Engineering**: Parquet for efficient storage, custom downcasting for memory optimization, and spatial splitting for robust model training.
-- **API**: RESTful endpoints for dynamic tile rendering and point-specific data retrieval.
+- **Infrastructure**: Parquet for high-performance lazy loading, intelligent tile caching, and multi-threaded rendering logic.
 
 ---
 
@@ -43,15 +53,14 @@ MSPF is a high-performance, AI-assisted decision-support system designed to eval
 nova_scope_2/
 ├── backend/            # Core logic and ML engine
 │   ├── API/            # FastAPI server, rendering engine, and tile proxy
-│   ├── models/         # Trained ML predictors (Water, Dust, Temp, etc.)
-│   └── data/           # Optimized datasets (Parquet/CSV)
+│   ├── models/         # Trained PyTorch predictors and hyperparameter configs
+│   └── data/           # Optimized Parquet datasets
 ├── frontend/           # Web-based interactive interface
-│   ├── index.html      # Main application entry point
-│   ├── app.js          # Map logic and API interaction
+│   ├── app.js          # Map logic and Leaflet implementation
 │   └── style.css       # Premium UI design
 ├── helper_functions/   # Data processing and optimization utilities
 ├── logging/            # System and model performance logs
-└── tile_cache/         # Local cache for NASA planetary tiles
+└── CODE_MANIFEST.md    # Index of authored and acquired code
 ```
 
 ---
@@ -77,24 +86,13 @@ nova_scope_2/
    ```
 
 4. **Run the Frontend**:
-   Simply open `frontend/index.html` in a modern web browser, or serve it via a local development server.
+   Simply open `frontend/index.html` in a modern web browser.
 
 ---
 
 ## 🛰️ Usage
 
-1. **Adjust Weights**: Use the "Mission Parameters" sidebar to define what factors matter most (e.g., maximize Water, minimize Dust).
-2. **Recalculate**: Click "Recalculate Heatmap" to update the global suitability map.
-3. **Explore**: Navigate the map to find high-scoring (green) zones.
-4. **Inspect**: Click on any location to view a comprehensive site survey with predicted values from all ML models.
-
----
-
-## 📜 Project Goals
-
-The MSPF framework aims to bridge the gap between raw planetary data and mission-critical decisions by:
-1. **Ensuring Safety**: Quantifying hazards like extreme slopes and temperature swings.
-2. **Maximizing Science**: Identifying areas with high resource potential (WEH) and geological diversity.
-3. **Accelerating Planning**: Reducing the time from data collection to site selection through AI-assisted visualization.
-
----
+1. **Adjust Weights**: Use the "Mission Parameters" sidebar to define priorities (e.g., maximize Water, maximize Slope safety).
+2. **Recalculate**: Click "Recalculate Heatmap" to update the global suitability model.
+3. **Explore**: Navigate the map to identify high-scoring (green) scientific targets.
+4. **Inspect**: Click any location for a site survey with predicted values from all six neural networks.

@@ -24,16 +24,19 @@ def evaluate_and_log(predictor, model_name):
         
         # Safely extract mean_pred whether it returned 2 or 5 items
         mean_pred = outputs[0]
+        uncertainty = outputs[1]
         y_true = predictor.y_test_raw
         
         r2 = float(r2_score(y_true, mean_pred))
         mae = float(mean_absolute_error(y_true, mean_pred))
         rmse = float(np.sqrt(mean_squared_error(y_true, mean_pred)))
+        mean_uncertainty = float(np.mean(uncertainty))
         
         metrics = {
             "R2": r2,
             "RMSE": rmse,
-            "MAE": mae
+            "MAE": mae,
+            "Mean_Uncertainty": mean_uncertainty
         }
         
         os.makedirs(METRICS_DIR, exist_ok=True)

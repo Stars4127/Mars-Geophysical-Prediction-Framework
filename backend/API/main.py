@@ -53,7 +53,7 @@ async def proxy_tile(z: int, x: int, y: int):
     
     if os.path.exists(cache_path) and os.path.getsize(cache_path) > 0:
         with open(cache_path, "rb") as f:
-            return Response(f.read(), media_type="image/jpeg", headers=headers)
+            return Response(f.read(), media_type="image/jpeg", headers={"Cache-Control": "public, max-age=31536000"})
 
     url = NASA_TILE_URL.format(z=z, x=x, y=y)
 
@@ -84,7 +84,7 @@ async def proxy_tile(z: int, x: int, y: int):
     with open(cache_path, "wb") as f:
         f.write(r.content)
 
-    return Response(r.content, media_type="image/jpeg", headers=headers)
+    return Response(r.content, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=31536000"})
 
 @app.get("/")
 async def root():

@@ -8,7 +8,8 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 from sklearn.preprocessing import RobustScaler
-from sklearn.metrics import r2_score, mean_absolute_error
+from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
+from sklearn.model_selection import train_test_split
 import optuna
 
 # =============================
@@ -144,19 +145,12 @@ class ThermalInertiaVariancePredictor:
 
         # --- Spatial Splitting by Latitude Bands ---
         df["lat_bin"] = pd.cut(df[lat_col], bins=10)
-        unique_bins = sorted(df["lat_bin"].unique().tolist())
         
-        # Deterministic shuffle for splitting
-        rng = random.Random(SEED)
-        rng.shuffle(unique_bins)
+        # We need stratified split
+        df_train_val, df_test = train_test_split(df, test_size=0.10, stratify=df["lat_bin"], random_state=SEED)
+        df_train, df_val = train_test_split(df_train_val, test_size=0.20, stratify=df_train_val["lat_bin"], random_state=SEED)
         
-        train_bins = unique_bins[:7]
-        val_bins = unique_bins[7:9]
-        test_bins = unique_bins[9:]
-        
-        df_train = df[df["lat_bin"].isin(train_bins)]
-        df_val = df[df["lat_bin"].isin(val_bins)]
-        df_test = df[df["lat_bin"].isin(test_bins)]
+        print(f"Spatial Split -> Train: {len(df_train)}, Val: {len(df_val)}, Test: {len(df_test)}")
         
         print(f"Spatial Split -> Train: {len(df_train)}, Val: {len(df_val)}, Test: {len(df_test)}")
 
@@ -192,7 +186,7 @@ class ThermalInertiaVariancePredictor:
     # ----------------------------
     # Training loop
     # ----------------------------
-    def _train(self, model, lr, max_epochs=250, patience=15, trial_idx=None, weight_decay=0.0):
+    def _train(self, model, lr, max_epochs=500, patience=30, trial_idx=None, weight_decay=0.0):
         model.to(device)
         optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
         criterion = nn.MSELoss()
@@ -243,14 +237,15 @@ class ThermalInertiaVariancePredictor:
     # ----------------------------
     # Hyperparameter tuning
     # ----------------------------
-    def tune(self, n_trials=50, max_epochs=25):
+    def tune(self, n_trials=50, max_epochs=30):
         def objective(trial):
             layers = trial.suggest_int("layers", 1, 6)
-            units = trial.suggest_int("units", 16, 256, step=16)
-            activation = trial.suggest_categorical("activation", ["relu", "tanh", "leaky_relu", "gelu", "elu", "sigmoid"])
-            lr = trial.suggest_float("lr", 1e-5, 1e-2, log=True)
-            weight_decay = trial.suggest_float("weight_decay", 1e-6, 1e-3, log=True)
-            dropout = trial.suggest_float("dropout", 0.0, 0.3)
+            units = trial.suggest_int("units", 128, 256, step=16)
+            activation = trial.suggest_categorical("activation", ["gelu", "elu"])
+            lr = trial.suggest_float("lr", 1e-4, 5e-4, log=True)
+            weight_decay = trial.suggest_float("weight_decay", 1e-6, 3e-4, log=True)
+            use_dropout = trial.suggest_categorical("use_dropout", [True, False])
+            dropout = trial.suggest_float("dropout", 0.1, 0.2) if use_dropout else 0.0
 
             model = ThermalInertiaVarianceANN(len(self.features), layers, units, activation, dropout=dropout).to(device)
             self._train(model, lr=lr, max_epochs=max_epochs, trial_idx=trial.number, weight_decay=weight_decay)
@@ -272,7 +267,7 @@ class ThermalInertiaVariancePredictor:
     # ----------------------------
     # Train best model (Ensemble)
     # ----------------------------
-    def train_best(self, max_epochs=300):
+    def train_best(self, max_epochs=500):
         if os.path.exists(PARAMS_PATH):
             with open(PARAMS_PATH) as f:
                 params = json.load(f)
@@ -331,11 +326,12 @@ class ThermalInertiaVariancePredictor:
 
         r2 = r2_score(self.y_test_raw, mean_pred)
         mae = mean_absolute_error(self.y_test_raw, mean_pred)
+        rmse = np.sqrt(mean_squared_error(self.y_test_raw, mean_pred))
 
-        print(f" Ensemble Test R²: {r2:.4f} | MAE: {mae:.4f}")
+        print(f" Ensemble Test R²: {r2:.4f} | RMSE: {rmse:.4f} | MAE: {mae:.4f}")
         print(f" Mean Uncertainty (StdDev): {uncertainty.mean():.4f}")
         
-        return mean_pred, uncertainty
+        return mean_pred, uncertainty, r2, rmse, mae
 
 
 # =============================
@@ -359,8 +355,8 @@ if __name__ == "__main__":
         ]
     )
     predictor.preprocess()
-    # predictor.tune(n_trials=25, max_epochs=15)
-    # predictor.train_best(max_epochs=300)
+    predictor.tune(n_trials=50, max_epochs=30)
+    predictor.train_best(max_epochs=500)
     predictor.load_and_eval()
 
 # Metrics

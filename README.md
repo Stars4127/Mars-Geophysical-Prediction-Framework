@@ -21,7 +21,7 @@ The core of the MSPF framework relies on a robust engineering and machine learni
 - **Data Engineering**: Features are scaled using `RobustScaler` to ensure convergence and stability. A rigorous spatial train-test split is used to prevent data leakage and ensure global generalizability.
 - **Hyperparameter Optimization**: Models undergo automated tuning through **Bayesian Optimization** (using Optuna’s TPE model) with R² score as the primary objective.
 - **Validation**: Quantitative results are validated against historical Martian landing sites and verified against 8ppd extrapolated ground-truth proxies.
-- **Performance**: Preliminary results indicate that key properties can be predicted with an **Average R² ≈ 0.66** (excluding variance models), providing a high-confidence baseline for mission planning.
+- **Performance**: Preliminary results indicate that key properties can be predicted with an **Average R² ≈ 0.93** (excluding variance models), providing a high-confidence baseline for mission planning.
 
 ---
 

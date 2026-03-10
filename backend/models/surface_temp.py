@@ -35,13 +35,25 @@ print(f" Using device: {device}")
 # MLP model
 # =============================
 class TempANN(nn.Module):
-    def __init__(self, input_dim, layers, units, activation):
+    def __init__(self, input_dim, layers, units, activation, dropout=0.0):
         super().__init__()
-        act_fn = nn.ReLU() if activation == "relu" else nn.Tanh()
+        if activation == "relu":
+            act_fn = nn.ReLU()
+        elif activation == "tanh":
+            act_fn = nn.Tanh()
+        elif activation == "gelu":
+            act_fn = nn.GELU()
+        elif activation == "elu":
+            act_fn = nn.ELU()
+        else:
+            act_fn = nn.ReLU()
+            
         net = []
         prev_dim = input_dim
         for _ in range(layers):
             net.append(nn.Linear(prev_dim, units))
+            if dropout > 0:
+                net.append(nn.Dropout(dropout))
             net.append(act_fn)
             prev_dim = units
         net.append(nn.Linear(prev_dim, 1))
@@ -107,19 +119,10 @@ class TempPredictor:
 
         # --- Spatial Splitting by Latitude Bands ---
         df["lat_bin"] = pd.cut(df["Latitude (N)"], bins=10)
-        unique_bins = sorted(df["lat_bin"].unique().tolist())
         
-        import random as rnd
-        rnd.seed(SEED)
-        rnd.shuffle(unique_bins)
-        
-        train_bins = unique_bins[:7]
-        val_bins = unique_bins[7:9]
-        test_bins = unique_bins[9:]
-        
-        df_train = df[df["lat_bin"].isin(train_bins)]
-        df_val = df[df["lat_bin"].isin(val_bins)]
-        df_test = df[df["lat_bin"].isin(test_bins)]
+        # We need stratified split
+        df_train_val, df_test = train_test_split(df, test_size=0.10, stratify=df["lat_bin"], random_state=SEED)
+        df_train, df_val = train_test_split(df_train_val, test_size=0.20, stratify=df_train_val["lat_bin"], random_state=SEED)
         
         print(f"Spatial Split -> Train: {len(df_train)}, Val: {len(df_val)}, Test: {len(df_test)}")
 
@@ -160,9 +163,9 @@ class TempPredictor:
     # ----------------------------
     # Training loop
     # ----------------------------
-    def _train(self, model, lr, max_epochs=250, patience=15, trial_idx=None):
+    def _train(self, model, lr, max_epochs=250, patience=30, trial_idx=None, weight_decay=0.0):
         model.to(device)
-        optimizer = optim.Adam(model.parameters(), lr=lr)
+        optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
         criterion = nn.MSELoss()
 
         best_loss = float("inf")
@@ -212,15 +215,18 @@ class TempPredictor:
     # ----------------------------
     # Hyperparameter tuning (with trial logging)
     # ----------------------------
-    def tune(self, n_trials=25, max_epochs=10):
+    def tune(self, n_trials=30, max_epochs=30):
         def objective(trial):
-            layers = trial.suggest_int("layers", 1, 4)
-            units = trial.suggest_int("units", 16, 128, step=16)
-            activation = trial.suggest_categorical("activation", ["relu", "tanh"])
-            lr = trial.suggest_float("lr", 1e-4, 1e-2, log=True)
+            layers = trial.suggest_int("layers", 1, 6)
+            units = trial.suggest_int("units", 128, 256, step=16)
+            activation = trial.suggest_categorical("activation", ["gelu", "elu"])
+            lr = trial.suggest_float("lr", 1e-4, 5e-4, log=True)
+            weight_decay = trial.suggest_float("weight_decay", 1e-6, 3e-4, log=True)
+            use_dropout = trial.suggest_categorical("use_dropout", [True, False])
+            dropout = trial.suggest_float("dropout", 0.1, 0.2) if use_dropout else 0.0
 
-            model = TempANN(len(self.features), layers, units, activation).to(device)
-            self._train(model, lr=lr, max_epochs=max_epochs, trial_idx=trial.number)
+            model = TempANN(len(self.features), layers, units, activation, dropout=dropout).to(device)
+            self._train(model, lr=lr, max_epochs=max_epochs, trial_idx=trial.number, weight_decay=weight_decay)
 
             # Evaluate on validation
             model.eval()
@@ -252,6 +258,8 @@ class TempPredictor:
         layers = params["layers"]
         units = params["units"]
         activation = params["activation"]
+        weight_decay = params.get("weight_decay", 0.0)
+        dropout = params.get("dropout", 0.0)
 
         print(f" Training Ensemble of {ENSEMBLE_SIZE} models...")
         # Ensure MODEL_DIR exists
@@ -261,8 +269,8 @@ class TempPredictor:
             print(f"\n--- Training Member {i+1}/{ENSEMBLE_SIZE} ---")
             torch.manual_seed(SEED + i)
             
-            model = TempANN(len(self.features), layers, units, activation)
-            model = self._train(model, lr, max_epochs=max_epochs)
+            model = TempANN(len(self.features), layers, units, activation, dropout=dropout)
+            model = self._train(model, lr, max_epochs=max_epochs, weight_decay=weight_decay)
             
             save_path = f"{MODEL_DIR}/model_{i}.pt"
             torch.save(model.state_dict(), save_path)
@@ -287,7 +295,8 @@ class TempPredictor:
         print(f" Loading Ensemble of {ENSEMBLE_SIZE} models from {MODEL_DIR}...")
 
         for i in range(ENSEMBLE_SIZE):
-            model = TempANN(len(self.features), params["layers"], params["units"], params["activation"]).to(device)
+            dropout = params.get("dropout", 0.0)
+            model = TempANN(len(self.features), params["layers"], params["units"], params["activation"], dropout=dropout).to(device)
             save_path = f"{MODEL_DIR}/model_{i}.pt"
             if not os.path.exists(save_path):
                 raise FileNotFoundError(f"Ensemble member {i} not found at {save_path}. Run train_best() first.")
@@ -333,8 +342,8 @@ if __name__ == "__main__":
         ]
     )
     predictor.preprocess()
-    # predictor.tune(n_trials=25, max_epochs=10)
-    # predictor.train_best(max_epochs=300)
+    predictor.tune(n_trials=30, max_epochs=30)
+    predictor.train_best(max_epochs=500)
     predictor.load_and_eval()
 
 # Metrics

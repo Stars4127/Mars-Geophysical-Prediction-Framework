@@ -33,14 +33,26 @@ print(f" Using device: {device}")
 # Model
 # =============================
 class WaterANN(nn.Module):
-    def __init__(self, input_dim, layers, units, activation):
+    def __init__(self, input_dim, layers, units, activation, dropout=0.0):
         super().__init__()
-        act = nn.ReLU() if activation == "relu" else nn.Tanh()
+        if activation == "relu":
+            act = nn.ReLU()
+        elif activation == "tanh":
+            act = nn.Tanh()
+        elif activation == "gelu":
+            act = nn.GELU()
+        elif activation == "elu":
+            act = nn.ELU()
+        else:
+            act = nn.ReLU()
 
         net = []
         dim = input_dim
         for _ in range(layers):
-            net += [nn.Linear(dim, units), act]
+            net.append(nn.Linear(dim, units))
+            if dropout > 0:
+                net.append(nn.Dropout(dropout))
+            net.append(act)
             dim = units
         net.append(nn.Linear(dim, 1))
 
@@ -109,20 +121,10 @@ class WaterPredictor:
 
         # --- Spatial Splitting by Latitude Bands ---
         df["lat_bin"] = pd.cut(df["Latitude (N)"], bins=10)
-        unique_bins = sorted(df["lat_bin"].unique().tolist())
         
-        # Shuffle bins deterministicly
-        import random as rnd
-        rnd.seed(SEED)
-        rnd.shuffle(unique_bins)
-        
-        train_bins = unique_bins[:7]
-        val_bins = unique_bins[7:9]
-        test_bins = unique_bins[9:]
-        
-        df_train = df[df["lat_bin"].isin(train_bins)]
-        df_val = df[df["lat_bin"].isin(val_bins)]
-        df_test = df[df["lat_bin"].isin(test_bins)]
+        # We need stratified split
+        df_train_val, df_test = train_test_split(df, test_size=0.10, stratify=df["lat_bin"], random_state=SEED)
+        df_train, df_val = train_test_split(df_train_val, test_size=0.20, stratify=df_train_val["lat_bin"], random_state=SEED)
         
         print(f"Spatial Split -> Train: {len(df_train)}, Val: {len(df_val)}, Test: {len(df_test)}")
 
@@ -160,9 +162,9 @@ class WaterPredictor:
     # -------------------------
     # Train loop
     # -------------------------
-    def _train(self, model, lr, max_epochs=250, patience=15, trial_idx=None):
+    def _train(self, model, lr, max_epochs=250, patience=30, trial_idx=None, weight_decay=0.0):
         model.to(device)
-        opt = optim.Adam(model.parameters(), lr=lr)
+        opt = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
         loss_fn = nn.MSELoss()
 
         best_loss = float("inf")
@@ -212,22 +214,25 @@ class WaterPredictor:
     # -------------------------
     # Tuning (optional)
     # -------------------------
-    def tune(self, n_trials=20, max_epochs=10):
+    def tune(self, n_trials=30, max_epochs=30):
         def objective(trial):
             model_params = {
-                "layers": trial.suggest_int("layers", 1, 4),
-                "units": trial.suggest_int("units", 16, 128, step=16),
-                "activation": trial.suggest_categorical("activation", ["relu", "tanh"]),
+                "layers": trial.suggest_int("layers", 1, 6),
+                "units": trial.suggest_int("units", 128, 256, step=16),
+                "activation": trial.suggest_categorical("activation", ["gelu", "elu"]),
             }
 
-            lr = trial.suggest_float("lr", 1e-4, 1e-2, log=True)
+            lr = trial.suggest_float("lr", 1e-4, 5e-4, log=True)
+            weight_decay = trial.suggest_float("weight_decay", 1e-6, 3e-4, log=True)
+            use_dropout = trial.suggest_categorical("use_dropout", [True, False])
+            model_params["dropout"] = trial.suggest_float("dropout", 0.1, 0.2) if use_dropout else 0.0
 
             model = WaterANN(
                 input_dim=len(self.features),
                 **model_params
             ).to(device)
 
-            self._train(model, lr, max_epochs=max_epochs)
+            self._train(model, lr, max_epochs=max_epochs, trial_idx=trial.number, weight_decay=weight_decay)
 
             model.eval()
             with torch.no_grad():
@@ -260,9 +265,11 @@ class WaterPredictor:
         model_params = {
             "layers": self.best_params["layers"],
             "units": self.best_params["units"],
-            "activation": self.best_params["activation"]
+            "activation": self.best_params["activation"],
+            "dropout": self.best_params.get("dropout", 0.0)
         }
         lr = self.best_params["lr"]
+        weight_decay = self.best_params.get("weight_decay", 0.0)
 
         print(f" Training Ensemble of {ENSEMBLE_SIZE} models...")
         for i in range(ENSEMBLE_SIZE):
@@ -271,7 +278,7 @@ class WaterPredictor:
             torch.manual_seed(SEED + i)
             
             model = WaterANN(len(self.features), **model_params)
-            model = self._train(model, lr, max_epochs=max_epochs)
+            model = self._train(model, lr, max_epochs=max_epochs, weight_decay=weight_decay)
             
             save_path = f"{MODEL_DIR}/model_{i}.pt"
             torch.save(model.state_dict(), save_path)
@@ -292,7 +299,8 @@ class WaterPredictor:
         model_params = {
             "layers": params["layers"],
             "units": params["units"],
-            "activation": params["activation"]
+            "activation": params["activation"],
+            "dropout": params.get("dropout", 0.0)
         }
 
         all_preds = []
@@ -343,8 +351,8 @@ if __name__ == "__main__":
     )
 
     predictor.preprocess()
-    # predictor.tune(n_trials=25, max_epochs=10)
-    # predictor.train_best()
+    predictor.tune(n_trials=30, max_epochs=30)
+    predictor.train_best(max_epochs=500)
     predictor.load_and_eval()
 
 

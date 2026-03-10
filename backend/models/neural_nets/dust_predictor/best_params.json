@@ -1,6 +1,8 @@
 {
   "layers": 4,
-  "units": 48,
-  "activation": "tanh",
-  "lr": 0.008774613077082976
+  "units": 208,
+  "activation": "gelu",
+  "lr": 0.00018104746209590596,
+  "weight_decay": 2.6921118017242423e-06,
+  "use_dropout": false
 }

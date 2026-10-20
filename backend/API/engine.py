@@ -5,7 +5,7 @@ import threading
 from scipy.spatial import cKDTree
 import pyarrow.parquet as pq
 
-DATA_PATH = "backend/models/datasets/8ppd_extrapolated_targets.parquet"
+DATA_PATH = "backend/datasets/8ppd_extrapolated_targets.parquet"
 
 SCALE = 27.0
 
@@ -91,8 +91,6 @@ class MSPF:
         try:
             n_rows = len(self.df)
             goodness = np.zeros(n_rows, dtype=np.float32)
-            total_weight = 0
-            total_weight = 0
             penalty_weight = float(weights.get("Uncertainty_Penalty", 0.5))
 
             features_to_load = [f for f, w in weights.items() if f in self.normalized_data and float(w) != 0]
@@ -106,7 +104,8 @@ class MSPF:
                     cols.append(f"{f}_Uncertainty")
 
             parquet_file = pq.ParquetFile(DATA_PATH)
-            
+            total_weight = sum(abs(float(weights[f])) for f in features_to_load)
+
             row_idx = 0
             for batch in parquet_file.iter_batches(batch_size=2_000_000, columns=cols):
                 chunk = batch.to_pandas().astype('float32')
@@ -143,8 +142,6 @@ class MSPF:
                     goodness[row_idx:row_idx+batch_len] += score * weight
                 
                 row_idx += batch_len
-                if total_weight == 0: # Initialize total_weight on first relevant feat
-                     for f in features_to_load: total_weight += abs(float(weights[f]))
 
             if total_weight > 0:
                 sample_goodness = goodness[::500] if len(goodness) > 1000 else goodness

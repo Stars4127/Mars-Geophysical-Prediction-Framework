@@ -8,6 +8,7 @@
 __pycache__/
 *.py[cod]
 
-backend/models/datasets/*
-!backend/models/datasets/core_set_2ppd.csv
-!backend/models/datasets/8ppd_extrapolated_targets.parquet
+backend/datasets/*
+!backend/datasets/core_set_2ppd.csv
+!backend/datasets/8ppd_extrapolated_targets.parquet
+

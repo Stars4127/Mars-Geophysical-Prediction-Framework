@@ -12,7 +12,7 @@ from sklearn.preprocessing import RobustScaler
 # ==============================
 # CONFIG
 # ==============================
-CSV_PATH = "backend/models/datasets/core_set_2ppd.csv"
+CSV_PATH = "backend/datasets/core_set_2ppd.csv"
 TARGET = 'Dayside Thermal Inertia (20 ppd) (Putzig and Mellon 2007)'
 
 FEATURES = [

@@ -65,7 +65,7 @@ def diagnose_dataset(csv_path, target_column, features, lat_col='Latitude (N)', 
 # =========================
 if __name__ == "__main__":
     df = diagnose_dataset(
-        csv_path="backend/models/datasets/core_set_2ppd.csv",
+        csv_path="backend/datasets/core_set_2ppd.csv",
         target_column='Yearly Mars Surface Temperature Variation (C)',
         features=[
             "Latitude (N)",

@@ -8,10 +8,12 @@
 | :--- | :--- | :--- | :--- |
 | **API Server** | FastAPI entry point, tile proxy, and REST endpoints. | `backend/API/main.py` | **Written** |
 | **Rendering Engine** | High-performance spatial analysis and tile generation. | `backend/API/engine.py` | **Written** |
-| **ML Predictors** | Standardized Neural Network models for Mars features. | `backend/models/*.py` | **Written** |
+| **Common ML Fn** | Shared data loading, training pipeline, and Optuna tuning. | `backend/common_fn/` | **Written** |
+| **ML Model Construct** | Singular configurable PyTorch neural network construction. | `backend/models/model.py` | **Written** |
+| **Model Run Scripts** | Per-model configs (`config.py`) and entrypoints (`main.py`). | `backend/run/<model>/` | **Written** |
 | **Interactive Map** | Premium Glassmorphism UI and Leaflet integration. | `frontend/` | **Written** |
 | **Data Utilities** | Parquet lazy-loading and 8ppd extrapolation logic. | `helper_functions/` | **Written** |
-| **Diagnostics** | Feature signal analysis and statistical validation. | `statiscial3.py` | **Written** |
+| **Diagnostics** | Feature signal analysis and statistical validation. | `backend/diagnose.py` | **Written** |
 | **Tile Cache** | Local persistence of NASA MDIM 2.1 planetary tiles. | `tile_cache/` | **Written** |
 
 ---
@@ -26,10 +28,10 @@ The following modules were custom-built and engineered to meet the project's per
 - **Spatial Indexing**: Implements `cKDTree` for sub-millisecond nearest-neighbor lookups (Point Surveys).
 - **Dynamic Heatmapping**: Custom Gaussian-blurred tile rendering logic with `RdYlGn` colormaps.
 
-### 2. Standardized ML Pipeline (`backend/models/`)
-- **Universal Architecture**: Implemented a unified training paradigm for `water_predictor.py`, `dust_predictor.py`, `surface_temp.py`, etc.
-- **Spatial Splitting**: Implemented robust latitude-band splitting (70/20/10) to prevent spatial autocorrelation leakage.
-- **Sine/Cosine Encoding**: Added periodic encoding for angular features like `Latitude` and `Aspect`.
+### 2. Standardized ML Pipeline (`backend/common_fn/`, `backend/models/model.py`, `backend/run/`)
+- **Universal Architecture**: Configurable `ConfigurableANN` architecture in `backend/models/model.py`.
+- **Modular Utilities**: Shared `data.py` (dataloading & spatial splits), `trainer.py` (ensemble training), and `tune.py` (Optuna tuning) in `backend/common_fn/`.
+- **Model Run Scripts**: Dedicated execution directories in `backend/run/<model_name>/` containing `config.py` and `main.py`.
 
 ### 3. Premium Frontend (`frontend/app.js`, `style.css`)
 - **Glassmorphism UI**: A modern, translucent interface with interactive sidebars and micro-animations.

@@ -18,9 +18,14 @@ NASA_TILE_URL = (
     "default/default028mm/{z}/{y}/{x}.jpg"
     f"?api_key={API_KEY}"
 )
+import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from engine import engine
+except ImportError:
+    from backend.API.engine import engine
 
-from engine import engine
 
 app = FastAPI(title="MSPF API", description="Martian Landing Site Selection Intelligence")
 

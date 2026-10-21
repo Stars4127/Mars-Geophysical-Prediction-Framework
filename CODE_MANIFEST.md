@@ -36,7 +36,7 @@ The following modules were custom-built and engineered to meet the project's per
 ### 3. Premium Frontend (`frontend/app.js`, `style.css`)
 - **Glassmorphism UI**: A modern, translucent interface with interactive sidebars and micro-animations.
 - **Leaflet Integration**: Custom tile layers for both NASA imagery and the dynamic heatmap.
-- **Live Diagnostics**: Real-time Lat/Lon tracking and point-specific data hydration from the API.
+- **Diagnostics**: Lat/Lon tracking and point-specific data hydration from the API.
 
 ---
 
@@ -73,6 +73,4 @@ The following components were sourced from external repositories, libraries, or 
 
 ## 📜 Attributions
 
-- **Data Credits**: All planetary data provided by NASA, JPL, and the USGS Astrogeology Science Center.
-- **Engineering**: Development, refactoring, and performance optimization performed by the project author.
-- **Core Methodology**: Based on the *Martian Landing Site Selection Framework*.
+- **Data Credits**: All planetary data provided by ASU's JMARS Tool, Martian Tile Images provided by NASA planetary API

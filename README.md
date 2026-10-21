@@ -51,48 +51,113 @@ The core of the MSPF framework relies on a robust engineering and machine learni
 
 ```text
 nova_scope_2/
-├── backend/            # Core logic and ML engine
-│   ├── API/            # FastAPI server, rendering engine, and tile proxy
-│   ├── models/         # Trained PyTorch predictors and hyperparameter configs
-│   └── data/           # Optimized Parquet datasets
-├── frontend/           # Web-based interactive interface
-│   ├── app.js          # Map logic and Leaflet implementation
-│   └── style.css       # Premium UI design
-├── helper_functions/   # Data processing and optimization utilities
-├── logging/            # System and model performance logs
-└── CODE_MANIFEST.md    # Index of authored and acquired code
+├── backend/
+│   ├── API/                   # FastAPI server, dynamic rendering engine, and NASA tile proxy
+│   │   ├── engine.py          # Spatial indexing (cKDTree), tile generation, & goodness scoring
+│   │   └── main.py            # REST endpoints (/tile, /goodness, /point, /heatmap, /meta)
+│   ├── common_fn/             # Shared ML pipeline components
+│   │   ├── data.py            # Preprocessing, periodic feature encoding, spatial splits, & RobustScaler
+│   │   ├── trainer.py         # Single model training with early stopping & ensemble trainer/evaluator
+│   │   └── tune.py            # Optuna Bayesian hyperparameter optimization
+│   ├── datasets/              # Datasets managed via Git LFS
+│   │   ├── core_set_2ppd.csv  # 2ppd Martian feature baseline dataset
+│   │   └── 8ppd_extrapolated_targets.parquet # 8ppd multi-model extrapolation targets
+│   ├── metrics/               # Evaluation metrics per model (R², RMSE, MAE, Uncertainty)
+│   ├── models/
+│   │   └── model.py           # Unified PyTorch ConfigurableANN (MLP) architecture
+│   ├── neural_nets/           # Trained ensemble weights (model_0..4.pt), best_params.json, scaler.joblib
+│   │   ├── dust_predictor/
+│   │   ├── gravity_predictor/
+│   │   ├── temp_predictor/
+│   │   ├── temp_variation_predictor/
+│   │   ├── ti_variance_predictor/
+│   │   └── water_predictor/
+│   ├── run/                   # Per-predictor execution scripts and configurations
+│   │   └── <model_name>/      # config.py and main.py for tuning, training, and evaluation
+│   ├── diagnose.py            # Feature distribution and dataset validation utility
+│   └── log_metrics.py         # Batch evaluation and metrics generation across all models
+├── frontend/                  # Modern Glassmorphism web interface
+│   ├── index.html             # UI layout and Leaflet map container
+│   ├── app.js                 # Dynamic heatmaps, coordinate tracking, & point surveys
+│   └── style.css              # Glassmorphic visual design system
+├── helper_functions/          # Extrapolation and statistical processing utilities
+├── tile_cache/                # Cached NASA MDIM 2.1 planetary tiles
+├── CODE_MANIFEST.md           # Index of authored and acquired components
+└── requirements.txt           # Python dependencies
 ```
+
+---
+
+## 📊 Model Performance Metrics
+
+Each predictor uses a 5-model deep ensemble with Bayesian-optimized hyperparameters and spatial train/val/test splits (stratified by 10 latitude bands):
+
+| Predictor | Target Property | R² | RMSE | MAE | Mean Uncertainty (σ) |
+| :--- | :--- | :---: | :---: | :---: | :---: |
+| **Water Predictor** | Mars Odyssey Neutron Spectrometer % WEH | **0.969** | 4.060 | 1.737 | 1.121 |
+| **Surface Temp** | Surface Temperature (TES / Thermal) | **0.998** | 0.994 | 0.607 | 0.289 |
+| **Temp Variation** | Seasonal Temperature Swing | **0.981** | 2.373 | 1.431 | 0.526 |
+| **Gravity Predictor** | Bouguer Gravity Anomaly | **0.910** | 55.332 | 37.458 | 17.865 |
+| **Dust Predictor** | Global Dust Coverage Index | **0.845** | 0.009 | 0.006 | 0.002 |
+| **TI Variance** | Diurnal Thermal Inertia Difference (ΔTI) | **0.342** | 24.935 | 15.502 | 3.317 |
+
+> **Note**: Primary predictors achieve an **Average R² ≈ 0.93** (excluding complex diurnal variance modeling).
 
 ---
 
 ## 📥 Installation & Setup
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/Stars4127/nova_scope_2.git
-   cd nova_scope_2
-   ```
+### 1. Prerequisites: Git LFS
+This repository uses **Git Large File Storage (Git LFS)** for datasets and neural network weights. Ensure Git LFS is installed prior to cloning:
+```bash
+git lfs install
+```
 
-2. **Set up the Python environment**:
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate  # On Windows use: .venv\Scripts\activate
-   pip install -r requirements.txt
-   ```
+### 2. Clone the Repository
+```bash
+git clone https://github.com/Stars4127/Mars-Subsurface-Prediction-Framework.git
+cd Mars-Subsurface-Prediction-Framework
+git lfs pull
+```
 
-3. **Launch the API Server**:
-   ```bash
-   python backend/API/main.py
-   ```
+### 3. Set up the Python Environment
+```bash
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+```
 
-4. **Run the Frontend**:
-   Simply open `frontend/index.html` in a modern web browser.
+### 4. Launch the API Server
+```bash
+python backend/API/main.py
+```
+The FastAPI server will start on `http://127.0.0.1:8000`.
+
+### 5. Open the Frontend
+Open `frontend/index.html` directly in any modern web browser or serve it via a local static server.
+
+---
+
+## 🏋️ Training & Tuning Models
+
+To tune, train, or evaluate any of the six individual neural network predictors:
+
+1. Navigate to the model's configuration: `backend/run/<model_name>/config.py`.
+2. Toggle flags as desired (`TUNE = True`, `TRAIN = True`, `EVAL = True`).
+3. Run the model pipeline:
+   ```bash
+   python backend/run/<model_name>/main.py
+   ```
+4. To re-evaluate all models and update performance logs:
+   ```bash
+   python backend/log_metrics.py
+   ```
 
 ---
 
 ## 🛰️ Usage
 
-1. **Adjust Weights**: Use the "Mission Parameters" sidebar to define priorities (e.g., maximize Water, maximize Slope safety).
-2. **Recalculate**: Click "Recalculate Heatmap" to update the global suitability model.
-3. **Explore**: Navigate the map to identify high-scoring (green) scientific targets.
-4. **Inspect**: Click any location for a site survey with predicted values from all six neural networks.
+1. **Adjust Weights**: Use the "Mission Parameters" sidebar to define mission criteria (e.g., prioritize Water enrichment or minimize slope/dust hazards).
+2. **Dynamic Heatmaps**: View dynamically generated heatmaps rendered server-side via Gaussian convolution and mapped to NASA Viking MDIM 2.1 base tiles.
+3. **Point Surveys**: Click anywhere on Mars to trigger a sub-millisecond nearest-neighbor search (`cKDTree`) retrieving full predictions and ensemble uncertainties for that coordinate.
+

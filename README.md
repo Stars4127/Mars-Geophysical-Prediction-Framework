@@ -1,4 +1,4 @@
-# Martian Subsurface Prediction Framework (MSPF)
+# Martian Geophysical Prediction Framework (MSPF)
 
 ![Mars Banner](https://img.shields.io/badge/Mars-Exploration-red?style=for-the-badge&logo=nasa)
 ![Python](https://img.shields.io/badge/Python-3.10+-blue?style=for-the-badge&logo=python)
@@ -7,9 +7,9 @@
 
 ## 📖 Abstract
 
-Selecting sites for planetary exploration is a difficult task. Changing regions, outdated planetary scans, the vast scope of the Martian surface, and low‑resolution subsurface data complicate decision‑making. Traditional methods, which often rely on rover comparisons or low-quality remote sensing, are slow, resource-intensive, and frequently produce inaccurate predictions of subsurface qualities like water concentration.
+Selecting sites for planetary exploration is a difficult task. Changing regions, outdated planetary scans, the vast scope of the Martian surface, and low‑resolution geophysical data complicate decision‑making. Traditional methods, which often rely on rover comparisons or low-quality remote sensing, are slow, resource-intensive, and frequently produce inaccurate predictions of geophysical qualities like water concentration.
 
-**MSPF** provides a scalable, machine learning-oriented approach to make initial site selection more efficient. By utilizing low-level surface qualities (topography, mineral densities, and thermal properties), this system predicts critical subsurface parameters at higher resolutions. Using a pipeline of feed-forward MLP neural networks, MSPF systematically evaluates candidate landing sites, reducing the need for exhaustive scanning and reliance on sparse data.
+**MSPF** provides a scalable, machine learning-oriented approach to make initial site selection more efficient. By utilizing low-level surface qualities (topography, mineral densities, and thermal properties), this system predicts critical geophysical parameters at higher resolutions. Using a pipeline of feed-forward MLP neural networks, MSPF systematically evaluates candidate landing sites, reducing the need for exhaustive scanning and reliance on sparse data.
 
 ---
 
@@ -28,7 +28,7 @@ The core of the MSPF framework relies on a robust engineering and machine learni
 ## 🚀 Key Features
 
 - **Multi-Model Predictive Analysis**: Six specialized predictors for:
-  - **Water Enrichment (WEH%)**: Subsurface hydrogen estimation.
+  - **Water Enrichment (WEH%)**: Geophysical hydrogen estimation.
   - **Dust Coverage**: Global surface dust distribution.
   - **Surface Temperatures**: Average and extreme thermal mapping.
   - **Gravity Anomalies**: Mapping gravitational fluctuations.
@@ -115,8 +115,8 @@ git lfs install
 
 ### 2. Clone the Repository
 ```bash
-git clone https://github.com/Stars4127/Mars-Subsurface-Prediction-Framework.git
-cd Mars-Subsurface-Prediction-Framework
+git clone https://github.com/Stars4127/Mars-Geophysical-Prediction-Framework.git
+cd Mars-Geophysical-Prediction-Framework
 git lfs pull
 ```
 

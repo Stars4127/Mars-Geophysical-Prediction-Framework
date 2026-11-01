@@ -1,4 +1,4 @@
-# Martian Geophysical Prediction Framework (MSPF)
+# Martian Geophysical Prediction Framework (MGPF)
 
 ![Mars Banner](https://img.shields.io/badge/Mars-Exploration-red?style=for-the-badge&logo=nasa)
 ![Python](https://img.shields.io/badge/Python-3.10+-blue?style=for-the-badge&logo=python)

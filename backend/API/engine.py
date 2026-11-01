@@ -5,7 +5,9 @@ import threading
 from scipy.spatial import cKDTree
 import pyarrow.parquet as pq
 
-DATA_PATH = "backend/datasets/8ppd_extrapolated_targets.parquet"
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+DEFAULT_DATA_PATH = os.path.join(REPO_ROOT, "backend/datasets/8ppd_extrapolated_targets.parquet")
+DATA_PATH = os.environ.get("MGPF_DATA_PATH", DEFAULT_DATA_PATH if os.path.exists(DEFAULT_DATA_PATH) else "backend/datasets/8ppd_extrapolated_targets.parquet")
 
 SCALE = 27.0
 
@@ -15,7 +17,7 @@ def raw_to_geo(lat_raw, lon_raw):
     lon = (lon_raw / SCALE) - 180
     return lat, lon
 
-class MSPF:
+class MGPF:
     def __init__(self):
         self.df = None
         self.tree = None
@@ -345,5 +347,6 @@ class MSPF:
         img.save(buf, format='PNG')
         return buf.getvalue()
 
-# Singleton instance
-engine = MSPF()
+# Singleton instance and backward compatibility alias
+MSPF = MGPF
+engine = MGPF()

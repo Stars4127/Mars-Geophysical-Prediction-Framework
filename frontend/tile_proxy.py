@@ -12,10 +12,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-CACHE_DIR = "tile_cache"
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+CACHE_DIR = os.environ.get("MGPF_CACHE_DIR", os.path.join(REPO_ROOT, "tile_cache"))
 os.makedirs(CACHE_DIR, exist_ok=True)
 
-API_KEY = "esivxORdeiiLhojROVwck3hyOgO4weCOpUJyxUY5"
+# Import API_KEY from key.py with graceful fallbacks
+try:
+    from key import API_KEY
+except ImportError:
+    try:
+        from frontend.key import API_KEY
+    except ImportError:
+        API_KEY = os.environ.get("NASA_API_KEY", "DEMO_KEY")
+
+if not API_KEY:
+    API_KEY = os.environ.get("NASA_API_KEY", "DEMO_KEY")
 
 NASA_TILE_URL = (
     "https://api.nasa.gov/mars-wmts/catalog/"

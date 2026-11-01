@@ -1,4 +1,4 @@
-# MSPF: Code Manifest & Documentation
+# MGPF: Code Manifest & Documentation
 
 ---
 

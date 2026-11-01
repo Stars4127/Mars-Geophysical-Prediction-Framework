@@ -9,13 +9,13 @@
 
 Selecting sites for planetary exploration is a difficult task. Changing regions, outdated planetary scans, the vast scope of the Martian surface, and low‑resolution geophysical data complicate decision‑making. Traditional methods, which often rely on rover comparisons or low-quality remote sensing, are slow, resource-intensive, and frequently produce inaccurate predictions of geophysical qualities like water concentration.
 
-**MSPF** provides a scalable, machine learning-oriented approach to make initial site selection more efficient. By utilizing low-level surface qualities (topography, mineral densities, and thermal properties), this system predicts critical geophysical parameters at higher resolutions. Using a pipeline of feed-forward MLP neural networks, MSPF systematically evaluates candidate landing sites, reducing the need for exhaustive scanning and reliance on sparse data.
+**MGPF** provides a scalable, machine learning-oriented approach to make initial site selection more efficient. By utilizing low-level surface qualities (topography, mineral densities, and thermal properties), this system predicts critical geophysical parameters at higher resolutions. Using a pipeline of feed-forward MLP neural networks, MGPF systematically evaluates candidate landing sites, reducing the need for exhaustive scanning and reliance on sparse data.
 
 ---
 
 ## 🔬 Methodology & Architecture
 
-The core of the MSPF framework relies on a robust engineering and machine learning pipeline designed for stability and scientific accuracy:
+The core of the MGPF framework relies on a robust engineering and machine learning pipeline designed for stability and scientific accuracy:
 
 - **ML Architecture**: Implements multiple feed-forward Multi-Layer Perceptron (MLP) neural networks using **PyTorch**.
 - **Data Engineering**: Features are scaled using `RobustScaler` to ensure convergence and stability. A rigorous spatial train-test split is used to prevent data leakage and ensure global generalizability.

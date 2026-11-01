@@ -7,10 +7,21 @@ import time
 import httpx
 import os
 
-CACHE_DIR = "tile_cache"
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+CACHE_DIR = os.environ.get("MGPF_CACHE_DIR", os.path.join(REPO_ROOT, "tile_cache"))
 os.makedirs(CACHE_DIR, exist_ok=True)
 
-API_KEY = "esivxORdeiiLhojROVwck3hyOgO4weCOpUJyxUY5"
+API_KEY = None
+try:
+    from frontend.key import API_KEY
+except ImportError:
+    try:
+        from key import API_KEY
+    except ImportError:
+        pass
+
+if not API_KEY:
+    API_KEY = os.environ.get("NASA_API_KEY", "DEMO_KEY")
 
 NASA_TILE_URL = (
     "https://api.nasa.gov/mars-wmts/catalog/"
@@ -27,7 +38,7 @@ except ImportError:
     from backend.API.engine import engine
 
 
-app = FastAPI(title="MSPF API", description="Martian Landing Site Selection Intelligence")
+app = FastAPI(title="MGPF API", description="Martian Landing Site Selection Intelligence")
 
 app.add_middleware(
     CORSMiddleware,
@@ -93,7 +104,7 @@ async def proxy_tile(z: int, x: int, y: int):
 
 @app.get("/")
 async def root():
-    return {"message": "MSPF API is Operational. Welcome to Mars."}
+    return {"message": "MGPF API is Operational. Welcome to Mars."}
 
 @app.post("/api/v1/calculate")
 async def calculate_goodness(weights: Weights):
@@ -149,7 +160,7 @@ def get_heatmap_tile(z: int, x: int, y: int,
 @app.get("/api/v1/meta")
 async def get_meta():
     return {
-        "dataset": "MSPF 8ppd Global Extrapolation",
+        "dataset": "MGPF 8ppd Global Extrapolation",
         "models": ["Water", "Dust", "Surface_Temp", "Temp_Variation", "Gravity", "TI_Variance"],
         "resolution": "8 ppd (pixels per degree)",
         "total_points": len(engine.df) if engine.df is not None else 0
@@ -157,8 +168,8 @@ async def get_meta():
 
 if __name__ == "__main__":
     # Explicitly ensure engine is loaded before starting the server
-    print(" Pre-loading MSPF...")
+    print(" Pre-loading MGPF...")
     from engine import engine
     
-    print(" Starting MSPF API Server...")
+    print(" Starting MGPF API Server...")
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

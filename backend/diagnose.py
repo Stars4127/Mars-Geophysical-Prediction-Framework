@@ -49,7 +49,7 @@ def diagnose_dataset(csv_path, target_column, features, lat_col='Latitude (N)', 
     if target_column in df.columns:
         outlier_threshold = 3 * y.std()
         outliers = ((y - y.mean()).abs() > outlier_threshold).sum()
-        print(f" Target outliers (>3σ): {outliers} points ({outliers/len(y)*100:.2f}%)")
+        print(f" Target outliers (>3 sigma): {outliers} points ({outliers/len(y)*100:.2f}%)")
 
     # Quick spatial split diagnostic
     if lat_col in df.columns:

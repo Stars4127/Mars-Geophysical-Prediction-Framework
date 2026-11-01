@@ -12,3 +12,8 @@ backend/datasets/*
 !backend/datasets/core_set_2ppd.csv
 !backend/datasets/8ppd_extrapolated_targets.parquet
 
+# API Keys and secrets
+*key.py
+.env
+
+

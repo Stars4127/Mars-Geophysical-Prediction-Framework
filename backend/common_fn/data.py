@@ -51,7 +51,7 @@ def load_and_preprocess_data(
         mean_y, std_y = df[target_column].mean(), df[target_column].std()
         lower, upper = mean_y - 3 * std_y, mean_y + 3 * std_y
         df[target_column] = df[target_column].clip(lower, upper)
-        print(f" Target '{target_column}' derived and clipped to ±3σ range: [{lower:.2f}, {upper:.2f}]")
+        print(f" Target '{target_column}' derived and clipped to +/-3 sigma range: [{lower:.2f}, {upper:.2f}]")
 
     lat_col = 'Latitude (N)'
     asp_col = 'MOLA 128ppd Aspect'
